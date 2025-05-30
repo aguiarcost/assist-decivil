@@ -9,15 +9,23 @@ from preparar_documentos_streamlit import processar_documentos
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # Base de conhecimento manual
-with open("base_conhecimento.json", "r", encoding="utf-8") as f:
-    base_manual = json.load(f)
+def carregar_base_manual():
+    try:
+        with open("base_conhecimento.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
 
 # Base de documentos vetorizados
-try:
-    with open("base_docs_vectorizada.json", "r", encoding="utf-8") as f:
-        base_docs = json.load(f)
-except FileNotFoundError:
-    base_docs = []
+def carregar_base_docs():
+    try:
+        with open("base_docs_vectorizada.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+base_manual = carregar_base_manual()
+base_docs = carregar_base_docs()
 
 # Embedding da pergunta
 def gerar_embedding(texto):
@@ -135,3 +143,31 @@ Se não encontrares resposta, diz que não tens informação suficiente.
             st.code(bloco['texto'][:500] + ("..." if len(bloco['texto']) > 500 else ""), language="markdown")
 
     return resposta_final
+
+# ▶️ Interface Streamlit
+st.title("💬 Assistente DECivil")
+
+st.markdown("Coloque aqui a sua dúvida ou escolha uma das perguntas frequentes.")
+
+perguntas_frequentes = [entrada["pergunta"] for entrada in base_manual]
+pergunta_selecionada = st.selectbox("Perguntas frequentes:", [""] + perguntas_frequentes)
+pergunta_digitada = st.text_input("Ou escreva a sua pergunta:")
+
+pergunta_final = pergunta_digitada or pergunta_selecionada
+
+# 📁 Upload de documentos
+st.markdown("---")
+st.markdown("### 📂 Carregar novos documentos")
+arquivos = st.file_uploader("Carregue ficheiros (.pdf, .docx, .txt)", type=["pdf", "docx", "txt"], accept_multiple_files=True)
+
+if arquivos:
+    for arquivo in arquivos:
+        processar_documentos(arquivo)
+    st.success("Documentos processados com sucesso. Por favor, volte a fazer a pergunta.")
+    base_docs = carregar_base_docs()
+
+# 💬 Responder à pergunta
+if pergunta_final:
+    resposta = gerar_resposta(pergunta_final)
+    st.markdown("### 🔄 Resposta:")
+    st.markdown(resposta)
