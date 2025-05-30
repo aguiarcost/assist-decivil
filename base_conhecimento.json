@@ -1,29 +1,38 @@
 [
   {
-    "texto": "Pedidos de reserva de salas devem ser enviados para gop@tecnico.ulisboa.pt"
+    "pergunta": "Como posso reservar uma sala?",
+    "resposta": "Os pedidos de reserva de sala devem ser enviados diretamente para o GOP através do email gop@tecnico.ulisboa.pt.",
+    "email": "gop@tecnico.ulisboa.pt",
+    "modelo_email": "Assunto: Pedido de reserva de sala\n\nExmos. Senhores,\n\nGostaria de reservar uma sala para [inserir evento ou reunião] no dia [data] entre as [hora início] e as [hora fim].\n\nAgradeço a confirmação da disponibilidade.\n\nCom os melhores cumprimentos,\n\n[Nome]"
   },
   {
-    "texto": "Pedidos de estacionamento devem ser feitos com 24h de antecedência para estacionamento@tecnico.ulisboa.pt"
+    "pergunta": "Como posso pedir um lugar de estacionamento?",
+    "resposta": "Os pedidos de estacionamento devem ser enviados para estacionamento@tecnico.ulisboa.pt com pelo menos 24 horas de antecedência.",
+    "email": "estacionamento@tecnico.ulisboa.pt",
+    "modelo_email": "Assunto: Pedido de estacionamento\n\nExmos. Senhores,\n\nVenho por este meio solicitar um lugar de estacionamento no campus para o dia [data], das [hora início] às [hora fim].\n\nAgradeço a atenção.\n\nCom os melhores cumprimentos,\n\n[Nome]"
   },
   {
-    "texto": "Pedidos de apoio informático devem ser enviados para apoiotecnico@civil.tecnico.ulisboa.pt"
+    "pergunta": "Quem devo contactar para apoio informático?",
+    "resposta": "O apoio informático no DECivil é prestado pela equipa de apoio técnico. Deves contactar através do email apoiotecnico@civil.tecnico.ulisboa.pt.",
+    "email": "apoiotecnico@civil.tecnico.ulisboa.pt",
+    "modelo_email": "Assunto: Pedido de apoio técnico\n\nCaros colegas,\n\nPreciso de apoio técnico para resolver a seguinte situação: [descrever o problema].\n\nAgradeço o vosso apoio.\n\nCom os melhores cumprimentos,\n\n[Nome]"
   },
   {
-    "texto": "Pedidos de aumento de quota de email devem ser enviados para dsi@tecnico.ulisboa.pt"
+    "pergunta": "Como registar um convidado externo no sistema?",
+    "resposta": "O registo de convidados externos deve ser feito online através da página oficial do IST: https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/",
+    "email": "https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/",
+    "modelo_email": ""
   },
   {
-    "texto": "Pedidos de acesso Wi-Fi para reuniões devem ser enviados para dsi@tecnico.ulisboa.pt"
+    "pergunta": "Quem devo contactar para declarações de serviço?",
+    "resposta": "Os pedidos de declarações devem ser feitos à DRH através do endereço nudi.declaracoes@drh.tecnico.ulisboa.pt.",
+    "email": "nudi.declaracoes@drh.tecnico.ulisboa.pt",
+    "modelo_email": "Assunto: Pedido de declaração de serviço\n\nExmos. Senhores,\n\nVenho solicitar uma declaração de serviço relativa à minha atividade docente no IST.\n\nAgradeço desde já a atenção.\n\nCom os melhores cumprimentos,\n\n[Nome]"
   },
   {
-    "texto": "Registo de convidados externos deve ser feito em https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/"
-  },
-  {
-    "texto": "Comunicação de avarias em telefones deve ser feita para nucleo.comunicacoes@tecnico.ulisboa.pt"
-  },
-  {
-    "texto": "Pedidos de declarações devem ser enviados para nudi.declaracoes@drh.tecnico.ulisboa.pt"
-  },
-  {
-    "texto": "Fotocópia de exames deve ser feita na reprografia ou pelo próprio docente em caso de impossibilidade"
+    "pergunta": "Posso pedir ao secretariado para fazer fotocópias de exames?",
+    "resposta": "As fotocópias de exames devem ser feitas na reprografia. Só em caso de impossibilidade deverá ser o próprio docente a fazê-las.",
+    "email": "",
+    "modelo_email": ""
   }
 ]
