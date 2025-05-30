@@ -4,21 +4,19 @@ import streamlit as st
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Lê a chave da OpenAI dos segredos (via Streamlit Cloud)
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# Carrega base manual de perguntas/respostas
+# Carregar base manual
 with open("base_conhecimento.json", "r", encoding="utf-8") as f:
     base_manual = json.load(f)
 
-# Carrega base vetorizada de documentos (se existir)
+# Carregar base vetorizada
 try:
     with open("base_docs_vectorizada.json", "r", encoding="utf-8") as f:
         base_docs = json.load(f)
 except FileNotFoundError:
     base_docs = []
 
-# Função para gerar embedding da pergunta
 def gerar_embedding(texto):
     resposta = openai.embeddings.create(
         input=texto,
@@ -26,25 +24,20 @@ def gerar_embedding(texto):
     )
     return resposta.data[0].embedding
 
-# Função para encontrar os blocos de documentos mais relevantes
 def procurar_blocos_relevantes(embedding_pergunta, top_n=3):
     if not base_docs:
         return []
 
     docs_embeddings = np.array([bloco["embedding"] for bloco in base_docs])
     pergunta_vector = np.array(embedding_pergunta).reshape(1, -1)
-
     similaridades = cosine_similarity(pergunta_vector, docs_embeddings)[0]
     indices_top = np.argsort(similaridades)[-top_n:][::-1]
+    return [base_docs[i] for i in indices_top]
 
-    blocos_relevantes = [base_docs[i] for i in indices_top]
-    return blocos_relevantes
-
-# Função principal de resposta
 def gerar_resposta(pergunta):
     pergunta_lower = pergunta.lower()
 
-    # Resposta padrão sobre o que o assistente pode fazer
+    # Explicação das funcionalidades
     if any(x in pergunta_lower for x in [
         "o que podes fazer", "que sabes fazer", "para que serves",
         "lista de coisas", "ajudas com", "que tipo de", "funcionalidades"
@@ -73,15 +66,20 @@ Podes perguntar, por exemplo:
 - "Dá-me um exemplo de email para pedir estacionamento"
 """
 
-    # Caso normal com embeddings e contexto
-    embedding = gerar_embedding(pergunta)
-    blocos = procurar_blocos_relevantes(embedding, top_n=3)
+    # Verificar se pergunta já existe na base manual
+    for entrada in base_manual:
+        if entrada["pergunta"].lower() in pergunta_lower:
+            resposta = entrada
+            break
+    else:
+        # Se não existir, usa contexto documental
+        embedding = gerar_embedding(pergunta)
+        blocos = procurar_blocos_relevantes(embedding, top_n=3)
+        contexto = "\n\n".join(
+            f"[{bloco['origem']}, página {bloco['pagina']}]:\n{bloco['texto']}" for bloco in blocos
+        )
 
-    contexto = "\n\n".join(
-        f"[{bloco['origem']}, página {bloco['pagina']}]:\n{bloco['texto']}" for bloco in blocos
-    )
-
-    prompt = f"""
+        prompt = f"""
 Estás a ajudar docentes e investigadores do DECivil a resolver dúvidas administrativas.
 
 Usa a seguinte base de conhecimento estruturada:
@@ -98,10 +96,22 @@ Responde com:
 - um modelo de email sugerido (se aplicável)
 """
 
-    resposta = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3
-    )
+        resultado = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
 
-    return resposta.choices[0].message.content
+        return resultado.choices[0].message.content
+
+    # Se for resposta manual, formatar
+    if isinstance(resposta, dict):
+        return f"""
+**❓ Pergunta:** {resposta['pergunta']}
+
+**💬 Resposta:** {resposta['resposta']}
+
+**📧 Email de contacto:** [{resposta['email']}](mailto:{resposta['email']})
+
+**📝 Modelo de email sugerido:**
+
