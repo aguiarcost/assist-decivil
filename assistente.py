@@ -28,7 +28,7 @@ def gerar_embedding(texto):
     return resposta.data[0].embedding
 
 # Encontrar blocos mais relevantes
-def procurar_blocos_relevantes(embedding_pergunta, top_n=3):
+def procurar_blocos_relevantes(embedding_pergunta, top_n=5):
     if not base_docs:
         return []
 
@@ -111,4 +111,11 @@ Se não encontrares resposta, diz que não tens informação suficiente.
         temperature=0.3
     )
 
-    return resposta.choices[0].message.content
+    resposta_final = resposta.choices[0].message.content
+
+    # DEBUG: Apresentar blocos relevantes se a resposta for vaga
+    if "não tenho informação" in resposta_final.lower() or "não encontrei" in resposta_final.lower():
+        debug_blocos = "\n\n".join([f"🔹 **Fonte**: {b['origem']}, página {b['pagina']}\n```\n{b['texto'][:500]}...\n```" for b in blocos_relevantes])
+        return f"{resposta_final}\n\n---\n**🔍 Blocos mais relevantes:**\n{debug_blocos}"
+
+    return resposta_final
