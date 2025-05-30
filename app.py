@@ -1,46 +1,49 @@
 import streamlit as st
 from assistente import gerar_resposta
-from preparar_documentos_streamlit import processar_documento
+from preparar_documentos_streamlit import processar_documentos
+import json
 
 st.set_page_config(page_title="Assistente DECivil", page_icon="📘")
-
 st.title("💬 Assistente DECivil")
-st.write("Coloque aqui a sua dúvida relacionada com tarefas administrativas:")
+st.write("Coloque aqui a sua dúvida ou selecione uma pergunta da lista:")
 
-# Campo para pergunta
-pergunta = st.text_input("Pergunta:")
+# Carregar perguntas da base de conhecimento
+try:
+    with open("base_conhecimento.json", "r", encoding="utf-8") as f:
+        base_manual = json.load(f)
+    perguntas_sugeridas = [item["pergunta"] for item in base_manual]
+except:
+    perguntas_sugeridas = []
 
-# Upload de documentos diversos
-st.write("\n**📌 Carregar documentos adicionais (PDF, DOCX, TXT):**")
+# Dropdown com perguntas da base
+pergunta_selecionada = st.selectbox("🔽 Perguntas frequentes:", [""] + perguntas_sugeridas)
+
+# Campo de input livre
+pergunta_livre = st.text_input("✍️ Ou escreva a sua pergunta:")
+
+# Escolher qual pergunta usar
+pergunta_final = pergunta_livre or pergunta_selecionada
+
+# Upload de documentos
+st.write("\n**📎 Carregar documentos adicionais (PDF, DOCX, TXT):**")
 uploaded_files = st.file_uploader(
     "Seleciona um ou mais ficheiros", 
     type=["pdf", "docx", "txt"], 
     accept_multiple_files=True
 )
 
-# Processar documentos
 if uploaded_files:
-    for uploaded_file in uploaded_files:
-        processar_documento(uploaded_file)
-    st.success("📄 Documentos processados com sucesso!")
-
-# Campo para colar link de website
-st.write("\n**🌐 Adicionar conteúdo de uma página web (URL):**")
-url = st.text_input("Introduz o link da página:")
-
-if url:
-    try:
-        processar_documento(url)
-        st.success("🌍 Conteúdo do website processado com sucesso!")
-    except Exception as e:
-        st.error(f"Erro ao processar o site: {e}")
+    for f in uploaded_files:
+        processar_documentos(f)
+    st.success("Documentos processados com sucesso!")
 
 # Gerar resposta
-if pergunta:
+if pergunta_final:
     with st.spinner("A pensar na melhor resposta..."):
         try:
-            resposta = gerar_resposta(pergunta)
+            resposta = gerar_resposta(pergunta_final)
             st.markdown("### 🧐 Resposta:")
             st.markdown(resposta)
         except Exception as e:
             st.error(f"❌ Ocorreu um erro: {e}")
+
