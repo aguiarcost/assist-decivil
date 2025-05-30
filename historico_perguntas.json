@@ -1,0 +1,11 @@
+def guardar_pergunta_no_historico(pergunta):
+    historico_path = "historico_perguntas.json"
+    try:
+        with open(historico_path, "r", encoding="utf-8") as f:
+            historico = json.load(f)
+    except FileNotFoundError:
+        historico = []
+
+    historico.append({"pergunta": pergunta})
+    with open(historico_path, "w", encoding="utf-8") as f:
+        json.dump(historico, f, ensure_ascii=False, indent=2)
