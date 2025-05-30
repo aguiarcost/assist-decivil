@@ -3,31 +3,32 @@ import json
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-
-# Carregar base vectorizada
+# Lê a base de dados com os embeddings
 with open("base_vectorizada.json", "r", encoding="utf-8") as f:
     base = json.load(f)
 
-def gerar_embedding(texto):
-    response = openai.embeddings.create(
-        input=texto,
-        model="text-embedding-3-small"
-    )
-    return response.data[0].embedding
-
 def gerar_resposta(pergunta):
-    pergunta_emb = gerar_embedding(pergunta)
-    pergunta_emb_np = np.array(pergunta_emb).reshape(1, -1)
+    # Gerar embedding da pergunta
+    resposta_emb = openai.embeddings.create(
+        input=pergunta,
+        model="text-embedding-3-small"
+    ).data[0].embedding
 
+    # Preparar os dados
     textos = [item["texto"] for item in base]
     embeddings = [item["embedding"] for item in base]
-    embeddings_np = np.array(embeddings)
 
-    # Calcular similaridade
-    sims = cosine_similarity(pergunta_emb_np, embeddings_np)[0]
+    # Calcular similaridades
+    sims = cosine_similarity(
+        [resposta_emb],
+        embeddings
+    )[0]
+
+    # Escolher os 3 mais relevantes
     top_idxs = sims.argsort()[-3:][::-1]
     contexto = "\n\n".join([textos[i] for i in top_idxs])
 
+    # Criar prompt
     prompt = f"""
     Estás a ajudar docentes e investigadores do DECivil a tratarem de assuntos administrativos,
     sem recorrer ao secretariado. Usa apenas o seguinte contexto:
