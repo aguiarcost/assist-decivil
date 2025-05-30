@@ -3,6 +3,7 @@ import openai
 import streamlit as st
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from preparar_documentos_streamlit import processar_documentos
 
 # Chave da API
 openai.api_key = st.secrets["OPENAI_API_KEY"]
