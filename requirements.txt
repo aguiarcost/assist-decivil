@@ -1,2 +1,5 @@
-openai>=1.0
 streamlit
+openai>=1.0
+scikit-learn
+tqdm
+numpy
