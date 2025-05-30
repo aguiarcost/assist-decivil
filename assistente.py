@@ -41,11 +41,9 @@ def procurar_blocos_relevantes(embedding_pergunta, top_n=3):
 def gerar_resposta(pergunta):
     pergunta_lower = pergunta.lower()
 
-    # Resposta padrão sobre funcionalidades
     if any(x in pergunta_lower for x in [
         "o que podes fazer", "que sabes fazer", "para que serves",
-        "lista de coisas", "ajudas com", "que tipo de", "funcionalidades"
-    ]):
+        "lista de coisas", "ajudas com", "que tipo de", "funcionalidades"]):
         return """
 **📌 Posso ajudar-te com várias tarefas administrativas no DECivil:**
 
@@ -57,14 +55,11 @@ def gerar_resposta(pergunta):
 - Declarações e contactos com a DRH
 - Comunicação de avarias
 
-📄 **Consulta de documentos administrativos**, como:
-- Regulamentos
-- Orientações internas
-- Notas informativas
+📄 **Consulta de documentos administrativos** (PDFs, DOCX, TXT, websites)
 
 📨 **Sugestões de modelos de email prontos a enviar**
 
-Podes perguntar, por exemplo:
+Exemplos:
 - "Como faço para reservar uma sala?"
 - "Quem trata de avarias no telefone?"
 - "Dá-me um exemplo de email para pedir estacionamento"
@@ -82,4 +77,28 @@ Podes perguntar, por exemplo:
 **📧 Email de contacto:** [{resposta['email']}](mailto:{resposta['email']})
 
 **📝 Modelo de email sugerido:**
+{resposta['modelo_email']}
+"""
 
+    # Procurar nos documentos vetorizados
+    embedding = gerar_embedding(pergunta)
+    blocos_relevantes = procurar_blocos_relevantes(embedding)
+
+    contexto = "\n".join([bloco["texto"] for bloco in blocos_relevantes])
+
+    prompt = f"""
+Contexto:
+{contexto}
+
+Pergunta: {pergunta}
+
+Responde de forma clara e objetiva para um docente do DECivil, em português de Portugal.
+"""
+
+    resposta = openai.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+
+    return resposta.choices[0].message.content
