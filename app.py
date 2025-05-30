@@ -1,5 +1,11 @@
 import streamlit as st
 from assistente import gerar_resposta
+from preparar_documentos_streamlit import preparar_documentos
+
+with st.expander("⚙️ Gerar base de documentos PDF"):
+    if st.button("🔄 Preparar documentos agora"):
+        total = preparar_documentos()
+        st.success(f"{total} blocos vetorizados com sucesso.")
 
 st.set_page_config(page_title="Assistente DECivil", page_icon="🏛️")
 st.title("💬 Assistente DECivil")
