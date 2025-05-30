@@ -1,49 +1,123 @@
-import streamlit as st
-from assistente import gerar_resposta
-from preparar_documentos_streamlit import processar_documentos
 import json
+import openai
+import streamlit as st
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+from preparar_documentos_streamlit import processar_documentos
 
-st.set_page_config(page_title="Assistente DECivil", page_icon="📘")
-st.title("💬 Assistente DECivil")
-st.write("Coloque aqui a sua dúvida ou selecione uma pergunta da lista:")
+# Chave da API
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# Carregar perguntas da base de conhecimento
+# Base de conhecimento manual
+with open("base_conhecimento.json", "r", encoding="utf-8") as f:
+    base_manual = json.load(f)
+
+# Base de documentos vetorizados
 try:
-    with open("base_conhecimento.json", "r", encoding="utf-8") as f:
-        base_manual = json.load(f)
-    perguntas_sugeridas = [item["pergunta"] for item in base_manual]
-except:
-    perguntas_sugeridas = []
+    with open("base_docs_vectorizada.json", "r", encoding="utf-8") as f:
+        base_docs = json.load(f)
+except FileNotFoundError:
+    base_docs = []
 
-# Dropdown com perguntas da base
-pergunta_selecionada = st.selectbox("🔽 Perguntas frequentes:", [""] + perguntas_sugeridas)
+# Embedding da pergunta
+def gerar_embedding(texto):
+    resposta = openai.embeddings.create(
+        input=texto,
+        model="text-embedding-3-small"
+    )
+    return resposta.data[0].embedding
 
-# Campo de input livre
-pergunta_livre = st.text_input("✍️ Ou escreva a sua pergunta:")
+# Encontrar blocos mais relevantes
+def procurar_blocos_relevantes(embedding_pergunta, top_n=5):
+    if not base_docs:
+        return []
 
-# Escolher qual pergunta usar
-pergunta_final = pergunta_livre or pergunta_selecionada
+    docs_embeddings = np.array([bloco["embedding"] for bloco in base_docs])
+    pergunta_vector = np.array(embedding_pergunta).reshape(1, -1)
+    similaridades = cosine_similarity(pergunta_vector, docs_embeddings)[0]
+    indices_top = np.argsort(similaridades)[-top_n:][::-1]
+    return [base_docs[i] for i in indices_top]
 
-# Upload de documentos
-st.write("\n**📎 Carregar documentos adicionais (PDF, DOCX, TXT):**")
-uploaded_files = st.file_uploader(
-    "Seleciona um ou mais ficheiros", 
-    type=["pdf", "docx", "txt"], 
-    accept_multiple_files=True
-)
+# Função principal de resposta
+def gerar_resposta(pergunta):
+    pergunta_lower = pergunta.lower()
 
-if uploaded_files:
-    for f in uploaded_files:
-        processar_documentos(f)
-    st.success("Documentos processados com sucesso!")
+    # Lista de funcionalidades
+    if any(x in pergunta_lower for x in [
+        "o que podes fazer", "que sabes fazer", "para que serves",
+        "lista de coisas", "ajudas com", "que tipo de", "funcionalidades"
+    ]):
+        return """
+**📌 Posso ajudar-te com várias tarefas administrativas no DECivil:**
 
-# Gerar resposta
-if pergunta_final:
-    with st.spinner("A pensar na melhor resposta..."):
-        try:
-            resposta = gerar_resposta(pergunta_final)
-            st.markdown("### 🧐 Resposta:")
-            st.markdown(resposta)
-        except Exception as e:
-            st.error(f"❌ Ocorreu um erro: {e}")
+✅ **Informações rápidas**:
+- Como reservar salas (GOP)
+- Pedidos de estacionamento
+- Apoio informático e acesso Wi-Fi
+- Registo de convidados no sistema
+- Declarações e contactos com a DRH
+- Comunicação de avarias
 
+📄 **Consulta de documentos administrativos**, como:
+- Regulamentos
+- Orientações internas
+- Notas informativas
+
+📨 **Sugestões de modelos de email prontos a enviar**
+
+Podes perguntar, por exemplo:
+- "Como faço para reservar uma sala?"
+- "Quem trata de avarias no telefone?"
+- "Dá-me um exemplo de email para pedir estacionamento"
+"""
+
+    # Verificar se corresponde a uma pergunta manual
+    for entrada in base_manual:
+        if entrada["pergunta"].lower() in pergunta_lower:
+            return f"""
+**❓ Pergunta:** {entrada['pergunta']}
+
+**💬 Resposta:** {entrada['resposta']}
+
+**📧 Email de contacto:** [{entrada['email']}](mailto:{entrada['email']})
+
+**📝 Modelo de email sugerido:**
+```text
+{entrada['modelo_email']}
+```
+"""
+
+    # Caso não exista na base manual, procurar nos documentos
+    embedding = gerar_embedding(pergunta)
+    blocos_relevantes = procurar_blocos_relevantes(embedding)
+
+    if not blocos_relevantes:
+        return "❌ Não encontrei informação suficiente para responder a isso."
+
+    contexto = "\n\n".join([b["texto"] for b in blocos_relevantes])
+
+    prompt = f"""
+A pergunta é: "{pergunta}"
+Com base no seguinte conteúdo, responde de forma direta e clara:
+
+{contexto}
+
+Se não encontrares resposta, diz que não tens informação suficiente.
+"""
+
+    resposta = openai.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+
+    resposta_final = resposta.choices[0].message.content
+
+    # DEBUG: Apresentar blocos relevantes se a resposta for vaga
+    if "não tenho informação" in resposta_final.lower() or "não encontrei" in resposta_final.lower():
+        with st.expander("🔍 Blocos mais relevantes encontrados", expanded=False):
+            for bloco in blocos_relevantes:
+                st.markdown(f"**Fonte**: {bloco['origem']}, página {bloco['pagina']}")
+                st.code(bloco['texto'][:500] + "...", language="markdown")
+
+    return resposta_final
