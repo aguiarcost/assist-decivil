@@ -27,16 +27,27 @@ def gerar_embedding(texto):
     )
     return resposta.data[0].embedding
 
-# Encontrar blocos mais relevantes
-def procurar_blocos_relevantes(embedding_pergunta, top_n=5):
+# Encontrar blocos mais relevantes por embedding
+def procurar_blocos_embedding(embedding_pergunta, top_n=3):
     if not base_docs:
         return []
-
     docs_embeddings = np.array([bloco["embedding"] for bloco in base_docs])
     pergunta_vector = np.array(embedding_pergunta).reshape(1, -1)
     similaridades = cosine_similarity(pergunta_vector, docs_embeddings)[0]
     indices_top = np.argsort(similaridades)[-top_n:][::-1]
     return [base_docs[i] for i in indices_top]
+
+# Encontrar blocos por palavras-chave
+def procurar_blocos_palavras(pergunta, top_n=2):
+    palavras = set(pergunta.lower().split())
+    blocos_com_score = []
+    for bloco in base_docs:
+        texto = bloco["texto"].lower()
+        score = sum(1 for p in palavras if p in texto)
+        if score > 0:
+            blocos_com_score.append((score, bloco))
+    blocos_ordenados = sorted(blocos_com_score, key=lambda x: x[0], reverse=True)
+    return [bloco for _, bloco in blocos_ordenados[:top_n]]
 
 # Função principal de resposta
 def gerar_resposta(pergunta):
@@ -89,7 +100,9 @@ Podes perguntar, por exemplo:
 
     # Caso não exista na base manual, procurar nos documentos
     embedding = gerar_embedding(pergunta)
-    blocos_relevantes = procurar_blocos_relevantes(embedding)
+    blocos_embedding = procurar_blocos_embedding(embedding)
+    blocos_keywords = procurar_blocos_palavras(pergunta)
+    blocos_relevantes = blocos_embedding + [b for b in blocos_keywords if b not in blocos_embedding]
 
     if not blocos_relevantes:
         return "❌ Não encontrei informação suficiente para responder a isso."
@@ -97,7 +110,7 @@ Podes perguntar, por exemplo:
     contexto = "\n\n".join([b["texto"] for b in blocos_relevantes])
 
     prompt = f"""
-A pergunta é: "{pergunta}"
+A pergunta é: \"{pergunta}\"
 Com base no seguinte conteúdo, responde de forma direta e clara:
 
 {contexto}
@@ -113,11 +126,12 @@ Se não encontrares resposta, diz que não tens informação suficiente.
 
     resposta_final = resposta.choices[0].message.content
 
-    # DEBUG: Apresentar blocos relevantes se a resposta for vaga
-    if "não tenho informação" in resposta_final.lower() or "não encontrei" in resposta_final.lower():
-        with st.expander("🔍 Blocos mais relevantes encontrados", expanded=False):
-            for bloco in blocos_relevantes:
-                st.markdown(f"**Fonte**: {bloco['origem']}, página {bloco['pagina']}")
-                st.code(bloco['texto'][:500] + "...", language="markdown")
+    # Mostrar blocos usados
+    with st.expander("🔍 Blocos usados para gerar a resposta", expanded=False):
+        for bloco in blocos_relevantes:
+            origem = bloco.get("origem", "desconhecida")
+            pagina = bloco.get("pagina", "?")
+            st.markdown(f"**Fonte**: {origem}, página {pagina}")
+            st.code(bloco['texto'][:500] + ("..." if len(bloco['texto']) > 500 else ""), language="markdown")
 
     return resposta_final
