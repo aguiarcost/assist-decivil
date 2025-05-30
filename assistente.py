@@ -3,7 +3,6 @@ import json
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # Carregar base vectorizada
 with open("base_vectorizada.json", "r", encoding="utf-8") as f:
