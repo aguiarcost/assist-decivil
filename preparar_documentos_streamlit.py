@@ -8,13 +8,11 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 
-# Obter chave da API
+# Chave da API
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# Caminho para base vetorizada
 CAMINHO_BASE = "base_docs_vectorizada.json"
 
-# Função auxiliar: gerar embedding
 def gerar_embedding(texto):
     response = openai.embeddings.create(
         input=texto,
@@ -22,7 +20,6 @@ def gerar_embedding(texto):
     )
     return response.data[0].embedding
 
-# Função auxiliar: guardar texto e embedding
 def guardar_embedding(texto, embedding):
     if os.path.exists(CAMINHO_BASE):
         with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
@@ -34,7 +31,6 @@ def guardar_embedding(texto, embedding):
     with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
         json.dump(base, f, ensure_ascii=False, indent=2)
 
-# Função para extrair texto de ficheiros
 def extrair_texto(file):
     if isinstance(file, str) and file.startswith("http"):
         return extrair_texto_website(file)
@@ -69,12 +65,25 @@ def extrair_texto_website(url):
     textos = soup.stripped_strings
     return "\n".join(textos)
 
-# Função principal
-def processar_documento(file_or_url):
-    texto = extrair_texto(file_or_url)
-    blocos = [texto[i:i+1000] for i in range(0, len(texto), 1000)]
+# ✅ Função principal para múltiplos uploads ou links
+def processar_documentos(file_or_url_list):
+    if not isinstance(file_or_url_list, list):
+        file_or_url_list = [file_or_url_list]
 
-    for bloco in blocos:
-        if bloco.strip():
-            embedding = gerar_embedding(bloco)
-            guardar_embedding(bloco, embedding)
+    for item in file_or_url_list:
+        try:
+            texto = extrair_texto(item)
+            blocos = [texto[i:i+1000] for i in range(0, len(texto), 1000)]
+
+            for bloco in blocos:
+                if bloco.strip():
+                    embedding = gerar_embedding(bloco)
+                    guardar_embedding(bloco, embedding)
+
+            if isinstance(item, str):
+                st.success(f"✅ Conteúdo do website processado: {item}")
+            else:
+                st.success(f"✅ Ficheiro processado: {item.name}")
+
+        except Exception as e:
+            st.error(f"❌ Erro ao processar {item if isinstance(item, str) else item.name}: {e}")
