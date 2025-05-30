@@ -1,6 +1,10 @@
 import streamlit as st
 from assistente import gerar_resposta
 
+# Passa a chave ao módulo assistente
+import openai
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
 st.set_page_config(page_title="Assistente DECivil", page_icon="💬")
 
 st.title("💬 Assistente DECivil")
