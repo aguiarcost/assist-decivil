@@ -2,14 +2,14 @@ import streamlit as st
 import openai
 import json
 
-# Lê a chave da OpenAI dos segredos (válido na cloud e localmente)
-client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Definir a chave da API da OpenAI
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # Carregar a base de conhecimento
 with open("base_conhecimento.json", "r", encoding="utf-8") as f:
     dados = json.load(f)
 
-# Função para gerar a resposta usando o novo SDK da OpenAI (>= v1.0)
+# Função para gerar a resposta
 def gerar_resposta(pergunta):
     prompt = f"""
     Estás a ajudar docentes e investigadores do DECivil a tratarem de assuntos administrativos
@@ -24,15 +24,15 @@ def gerar_resposta(pergunta):
     - e um modelo de email sugerido, se aplicável.
     """
 
-    resposta = client.chat.completions.create(
-        model="gpt-4",  # ou "gpt-3.5-turbo"
+    resposta = openai.chat.completions.create(
+        model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
     )
 
     return resposta.choices[0].message.content
 
-# Interface do utilizador em Streamlit
+# Interface do utilizador
 st.title("💬 Assistente DECivil")
 st.write("Coloque aqui a sua dúvida relacionada com pedidos administrativos:")
 
