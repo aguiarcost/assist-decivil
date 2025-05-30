@@ -1,50 +1,29 @@
 [
   {
-    "tema": "reserva de sala",
-    "descricao": "Pedidos de reserva de sala devem ser enviados com 24h de antecedência diretamente ao GOP.",
-    "email": "gop@tecnico.ulisboa.pt",
-    "modelo_email": "Exmos. Senhores,\n\nVenho por este meio solicitar a reserva de uma sala para a seguinte atividade:\n- Data: [inserir data]\n- Hora: [inserir hora]\n- Duração: [ex: 2h]\n- Tipo de atividade: [ex: reunião, apresentação, defesa, etc.]\n- Nº previsto de participantes: [inserir número]\n\nAgradeço desde já a vossa disponibilidade.\n\nCom os melhores cumprimentos,\n[Nome completo]\n[Departamento/Unidade]"
+    "texto": "Pedidos de reserva de salas devem ser enviados para gop@tecnico.ulisboa.pt"
   },
   {
-    "tema": "pedido de estacionamento",
-    "descricao": "Pedidos de acesso ao estacionamento devem ser enviados com 24h de antecedência.",
-    "email": "estacionamento@tecnico.ulisboa.pt",
-    "modelo_email": "Bom dia,\n\nSolicito o acesso ao estacionamento do campus para o dia [data], entre as [hora de entrada] e as [hora de saída].\n\nNome completo: [inserir]\nNº mecanográfico: [inserir]\nMatrícula da viatura: [inserir]\n\nAgradeço a atenção.\n\nCumprimentos,\n[Nome]"
+    "texto": "Pedidos de estacionamento devem ser feitos com 24h de antecedência para estacionamento@tecnico.ulisboa.pt"
   },
   {
-    "tema": "apoio informático",
-    "descricao": "Pedidos de apoio informático devem ser enviados diretamente ao apoio técnico do DECivil.",
-    "email": "apoiotecnico@civil.tecnico.ulisboa.pt",
-    "modelo_email": "Caros colegas,\n\nSolicito apoio técnico para o seguinte problema:\n[Descrever o problema de forma clara]\n\nAgradeço desde já o vosso apoio.\n\nCom os melhores cumprimentos,\n[Nome]"
+    "texto": "Pedidos de apoio informático devem ser enviados para apoiotecnico@civil.tecnico.ulisboa.pt"
   },
   {
-    "tema": "acesso wi-fi para reuniões",
-    "descricao": "Pedidos de acesso Wi-Fi para convidados em reuniões devem ser enviados ao DSI.",
-    "email": "dsi@tecnico.ulisboa.pt",
-    "modelo_email": "Caros colegas,\n\nSolicito acesso Wi-Fi para convidados numa reunião a realizar no dia [data], pelas [hora], na sala [indicar].\n\nAgradeço a vossa colaboração.\n\nMelhores cumprimentos,\n[Nome]"
+    "texto": "Pedidos de aumento de quota de email devem ser enviados para dsi@tecnico.ulisboa.pt"
   },
   {
-    "tema": "registo de pessoa externa",
-    "descricao": "O registo de convidados externos deve ser feito através da plataforma SI.",
-    "email": "—",
-    "modelo_email": "O registo deve ser feito em: https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/"
+    "texto": "Pedidos de acesso Wi-Fi para reuniões devem ser enviados para dsi@tecnico.ulisboa.pt"
   },
   {
-    "tema": "avaria em telefones",
-    "descricao": "A comunicação de avarias em telefones deve ser feita ao núcleo de comunicações.",
-    "email": "nucleo.comunicacoes@tecnico.ulisboa.pt",
-    "modelo_email": "Bom dia,\n\nComunico a avaria do telefone n.º [inserir], localizado em [indicar localização], com o seguinte problema: [descrever brevemente].\n\nAgradeço a atenção.\n\nCumprimentos,\n[Nome]"
+    "texto": "Registo de convidados externos deve ser feito em https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/"
   },
   {
-    "tema": "pedido de declaração DRH",
-    "descricao": "Pedidos de declaração devem ser enviados diretamente ao NUDI/DRH.",
-    "email": "nudi.declaracoes@drh.tecnico.ulisboa.pt",
-    "modelo_email": "Exmos. Senhores,\n\nVenho por este meio solicitar a emissão de uma declaração para [ex: efeitos fiscais, candidatura, etc.].\n\nNome completo: [inserir]\nNº mecanográfico: [inserir]\nFinalidade da declaração: [especificar]\n\nAgradeço desde já a vossa atenção.\n\nCom os melhores cumprimentos,\n[Nome]"
+    "texto": "Comunicação de avarias em telefones deve ser feita para nucleo.comunicacoes@tecnico.ulisboa.pt"
   },
   {
-    "tema": "fotocópias de exames",
-    "descricao": "As fotocópias de exames devem ser feitas na reprografia. Em caso de impossibilidade, deverá ser o próprio docente a fazê-lo.",
-    "email": "—",
-    "modelo_email": "As fotocópias devem ser feitas diretamente na reprografia. Caso não seja possível, o docente deve realizar a cópia pelos seus próprios meios."
+    "texto": "Pedidos de declarações devem ser enviados para nudi.declaracoes@drh.tecnico.ulisboa.pt"
+  },
+  {
+    "texto": "Fotocópia de exames deve ser feita na reprografia ou pelo próprio docente em caso de impossibilidade"
   }
 ]
