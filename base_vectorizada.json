@@ -1,1 +1,39 @@
+[
+  {
+    "texto": "Pedidos de reserva de salas devem ser enviados para gop@tecnico.ulisboa.pt",
+    "embedding": [0.0101, -0.0032, 0.0123, 0.0045, -0.0098]
+  },
+  {
+    "texto": "Pedidos de estacionamento devem ser feitos com 24h de antecedência para estacionamento@tecnico.ulisboa.pt",
+    "embedding": [0.0077, -0.0043, 0.0102, 0.0021, -0.0114]
+  },
+  {
+    "texto": "Pedidos de apoio informático devem ser enviados para apoiotecnico@civil.tecnico.ulisboa.pt",
+    "embedding": [0.0112, -0.0065, 0.0093, 0.0054, -0.0089]
+  },
+  {
+    "texto": "Pedidos de aumento de quota de email devem ser enviados para dsi@tecnico.ulisboa.pt",
+    "embedding": [0.0133, -0.0055, 0.0078, 0.0032, -0.0101]
+  },
+  {
+    "texto": "Pedidos de acesso Wi-Fi para reuniões devem ser enviados para dsi@tecnico.ulisboa.pt",
+    "embedding": [0.0091, -0.0033, 0.0082, 0.0043, -0.0097]
+  },
+  {
+    "texto": "Registo de convidados externos deve ser feito em https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/",
+    "embedding": [0.0088, -0.0051, 0.0104, 0.0035, -0.0109]
+  },
+  {
+    "texto": "Comunicação de avarias em telefones deve ser feita para nucleo.comunicacoes@tecnico.ulisboa.pt",
+    "embedding": [0.0125, -0.0067, 0.0064, 0.0028, -0.0077]
+  },
+  {
+    "texto": "Pedidos de declarações devem ser enviados para nudi.declaracoes@drh.tecnico.ulisboa.pt",
+    "embedding": [0.0109, -0.0049, 0.0098, 0.0011, -0.0083]
+  },
+  {
+    "texto": "Fotocópia de exames deve ser feita na reprografia ou pelo próprio docente em caso de impossibilidade",
+    "embedding": [0.0074, -0.0027, 0.0113, 0.0039, -0.0092]
+  }
+]
 
