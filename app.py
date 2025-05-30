@@ -9,6 +9,9 @@ st.set_page_config(page_title="Assistente DECivil", page_icon="💬")
 st.title("💬 Assistente DECivil")
 st.write("Coloque aqui a sua dúvida relacionada com pedidos administrativos:")
 
+if pergunta.strip() == "":
+    st.info("💡 Escreva a sua dúvida ou experimente 'o que sabes fazer?' para ver os pedidos disponíveis.")
+
 pergunta = st.text_input("Pergunta:")
 
 if pergunta:
