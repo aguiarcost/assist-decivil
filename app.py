@@ -7,7 +7,7 @@ st.set_page_config(page_title="Assistente DECivil", page_icon="💬")
 st.title("💬 Assistente DECivil")
 st.write("Coloque aqui a sua dúvida relacionada com pedidos administrativos ou documentos disponíveis:")
 
-# Expansor com sugestões de perguntas
+# Exemplos de perguntas
 with st.expander("📌 Exemplos de perguntas que pode fazer"):
     st.markdown("""
 - Como reservo uma sala?
@@ -18,7 +18,7 @@ with st.expander("📌 Exemplos de perguntas que pode fazer"):
 - O que sabes fazer?
 """)
 
-# Expansor para carregar e processar novos documentos PDF
+# Upload de PDF
 with st.expander("📥 Adicionar novo documento PDF"):
     uploaded_file = st.file_uploader("Carrega um PDF para adicionar à base de conhecimento", type="pdf")
     if uploaded_file is not None:
