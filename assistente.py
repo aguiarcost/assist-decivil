@@ -1,93 +1,101 @@
-import openai
 import json
-import numpy as np
-import os
-from sklearn.metrics.pairwise import cosine_similarity
+import openai
 import streamlit as st
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Lê base vectorizada
-with open("base_vectorizada.json", "r", encoding="utf-8") as f:
-    base = json.load(f)
+# Lê a chave da OpenAI dos segredos (via Streamlit Cloud)
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# Função para adicionar novos conhecimentos
-def adicionar_conhecimento(texto):
-    if texto.lower().startswith("adicionar pergunta:") and "resposta:" in texto.lower():
-        partes = texto.split("Resposta:")
-        pergunta_nova = partes[0].replace("Adicionar pergunta:", "").strip()
-        resposta_nova = partes[1].strip()
+# Carrega base manual de perguntas/respostas
+with open("base_conhecimento.json", "r", encoding="utf-8") as f:
+    base_manual = json.load(f)
 
-        nova_entrada = {
-            "texto": f"{pergunta_nova} => {resposta_nova}"
-        }
+# Carrega base vetorizada de documentos (se existir)
+try:
+    with open("base_docs_vectorizada.json", "r", encoding="utf-8") as f:
+        base_docs = json.load(f)
+except FileNotFoundError:
+    base_docs = []
 
-        caminho = "base_conhecimento.json"
-        if os.path.exists(caminho):
-            with open(caminho, "r", encoding="utf-8") as f:
-                dados = json.load(f)
-        else:
-            dados = []
+# Função para gerar embedding da pergunta
+def gerar_embedding(texto):
+    resposta = openai.embeddings.create(
+        input=texto,
+        model="text-embedding-3-small"
+    )
+    return resposta.data[0].embedding
 
-        dados.append(nova_entrada)
+# Função para encontrar os blocos de documentos mais relevantes
+def procurar_blocos_relevantes(embedding_pergunta, top_n=3):
+    if not base_docs:
+        return []
 
-        with open(caminho, "w", encoding="utf-8") as f:
-            json.dump(dados, f, ensure_ascii=False, indent=2)
+    docs_embeddings = np.array([bloco["embedding"] for bloco in base_docs])
+    pergunta_vector = np.array(embedding_pergunta).reshape(1, -1)
 
-        return True, pergunta_nova
-    return False, None
+    similaridades = cosine_similarity(pergunta_vector, docs_embeddings)[0]
+    indices_top = np.argsort(similaridades)[-top_n:][::-1]
 
-# Geração da resposta
+    blocos_relevantes = [base_docs[i] for i in indices_top]
+    return blocos_relevantes
+
+# Função principal de resposta
 def gerar_resposta(pergunta):
-    pergunta_limpa = pergunta.strip().lower()
+    pergunta_lower = pergunta.lower()
 
-    # Verifica se o utilizador quer adicionar conhecimento
-    sucesso, nova_pergunta = adicionar_conhecimento(pergunta)
-    if sucesso:
-        return f"✅ Nova pergunta adicionada com sucesso: *{nova_pergunta}*.\n\n⚠️ Terás de correr novamente o script `prepara_base.py` para que o assistente passe a considerar esta informação."
-
-    # Mostra ajuda básica
-    if pergunta_limpa in ["", "ajuda", "menu", "o que sabes fazer", "o que sabes fazer?"]:
+    # Resposta padrão sobre o que o assistente pode fazer
+    if any(x in pergunta_lower for x in [
+        "o que podes fazer", "que sabes fazer", "para que serves",
+        "lista de coisas", "ajudas com", "que tipo de", "funcionalidades"
+    ]):
         return """
-🧾 Posso ajudar com os seguintes pedidos administrativos no DECivil:
+Posso ajudar-te com várias tarefas administrativas no DECivil. Eis alguns exemplos:
 
-- 📅 Reservar salas (gop@tecnico.ulisboa.pt)
-- 🚗 Pedidos de estacionamento (estacionamento@tecnico.ulisboa.pt)
-- 🧑‍💻 Apoio informático (apoiotecnico@civil.tecnico.ulisboa.pt)
-- 📧 Aumento de quota de email (dsi@tecnico.ulisboa.pt)
-- 🌐 Acesso Wi-Fi para reuniões (dsi@tecnico.ulisboa.pt)
-- 👤 Registo de convidados externos (https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/)
-- ☎️ Comunicação de avarias em telefones (nucleo.comunicacoes@tecnico.ulisboa.pt)
-- 📄 Pedidos de declarações (nudi.declaracoes@drh.tecnico.ulisboa.pt)
-- 🖨️ Fotocópia de exames (na reprografia ou pelo próprio docente)
+✅ Informações sobre:
+- Como reservar salas (GOP)
+- Pedidos de estacionamento
+- Apoio informático e acesso Wi-Fi
+- Registo de convidados no sistema
+- Declarações e contactos com a DRH
+- Comunicação de avarias
 
-Podes escrever, por exemplo:  
-👉 "Quero reservar uma sala"  
-👉 "Preciso de uma declaração"
+📄 Também posso consultar documentos administrativos para responder a perguntas mais específicas, como:
+- Regulamentos
+- Orientações internas
+- Notas informativas
+
+📨 E ainda sugiro modelos de email prontos a enviar sempre que possível.
+
+Podes perguntar, por exemplo:
+- "Como faço para reservar uma sala?"
+- "Quem trata de avarias no telefone?"
+- "Dá-me um exemplo de email para pedir estacionamento"
 """
 
-    # Geração do embedding da pergunta
-    resposta_emb = openai.embeddings.create(
-        input=pergunta,
-        model="text-embedding-3-small"
-    ).data[0].embedding
+    # Caso normal com embeddings e contexto
+    embedding = gerar_embedding(pergunta)
+    blocos = procurar_blocos_relevantes(embedding, top_n=3)
 
-    textos = [item["texto"] for item in base]
-    embeddings = [item["embedding"] for item in base]
-
-    sims = cosine_similarity([resposta_emb], embeddings)[0]
-    top_idxs = sims.argsort()[-3:][::-1]
-    contexto = "\n\n".join([textos[i] for i in top_idxs])
+    contexto = "\n\n".join(
+        f"[{bloco['origem']}, página {bloco['pagina']}]:\n{bloco['texto']}" for bloco in blocos
+    )
 
     prompt = f"""
-Estás a ajudar docentes e investigadores do DECivil a tratarem de assuntos administrativos,
-sem recorrer ao secretariado. Usa apenas o seguinte contexto:
+Estás a ajudar docentes e investigadores do DECivil a resolver dúvidas administrativas.
 
+Usa a seguinte base de conhecimento estruturada:
+{json.dumps(base_manual, indent=2)}
+
+E, se necessário, também estes excertos retirados de documentos:
 {contexto}
 
 Pergunta: {pergunta}
+
 Responde com:
 - uma explicação simples
-- o contacto de email, se aplicável
-- um modelo de email sugerido, se fizer sentido.
+- o contacto de email
+- um modelo de email sugerido (se aplicável)
 """
 
     resposta = openai.chat.completions.create(
