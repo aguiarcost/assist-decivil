@@ -4,6 +4,7 @@ import streamlit as st
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from preparar_documentos_streamlit import processar_documentos
+import os
 
 # Chave da API
 openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -23,6 +24,19 @@ def carregar_base_docs():
             return json.load(f)
     except FileNotFoundError:
         return []
+
+# Base de histórico de perguntas
+def guardar_pergunta_no_historico(pergunta):
+    historico_path = "historico_perguntas.json"
+    try:
+        with open(historico_path, "r", encoding="utf-8") as f:
+            historico = json.load(f)
+    except FileNotFoundError:
+        historico = []
+
+    historico.append({"pergunta": pergunta})
+    with open(historico_path, "w", encoding="utf-8") as f:
+        json.dump(historico, f, ensure_ascii=False, indent=2)
 
 base_manual = carregar_base_manual()
 base_docs = carregar_base_docs()
@@ -66,6 +80,7 @@ def gerar_resposta(pergunta):
         "o que podes fazer", "que sabes fazer", "para que serves",
         "lista de coisas", "ajudas com", "que tipo de", "funcionalidades"
     ]):
+        guardar_pergunta_no_historico(pergunta)
         return """
 **📌 Posso ajudar-te com várias tarefas administrativas no DECivil:**
 
@@ -90,9 +105,9 @@ Podes perguntar, por exemplo:
 - "Dá-me um exemplo de email para pedir estacionamento"
 """
 
-    # Verificar se corresponde a uma pergunta manual
     for entrada in base_manual:
         if entrada["pergunta"].lower() in pergunta_lower:
+            guardar_pergunta_no_historico(pergunta)
             return f"""
 **❓ Pergunta:** {entrada['pergunta']}
 
@@ -106,13 +121,13 @@ Podes perguntar, por exemplo:
 ```
 """
 
-    # Caso não exista na base manual, procurar nos documentos
     embedding = gerar_embedding(pergunta)
     blocos_embedding = procurar_blocos_embedding(embedding)
     blocos_keywords = procurar_blocos_palavras(pergunta)
     blocos_relevantes = blocos_embedding + [b for b in blocos_keywords if b not in blocos_embedding]
 
     if not blocos_relevantes:
+        guardar_pergunta_no_historico(pergunta)
         return "❌ Não encontrei informação suficiente para responder a isso."
 
     contexto = "\n\n".join([b["texto"] for b in blocos_relevantes])
@@ -134,7 +149,8 @@ Se não encontrares resposta, diz que não tens informação suficiente.
 
     resposta_final = resposta.choices[0].message.content
 
-    # Mostrar blocos usados
+    guardar_pergunta_no_historico(pergunta)
+
     with st.expander("🔍 Blocos usados para gerar a resposta", expanded=False):
         for bloco in blocos_relevantes:
             origem = bloco.get("origem", "desconhecida")
