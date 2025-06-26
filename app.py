@@ -160,6 +160,15 @@ Se não encontrares resposta, diz que não tens informação suficiente.
 
     return resposta_final
 
+def adicionar_perguntas_base_manual(novas_perguntas):
+    base = carregar_base_manual()
+    perguntas_existentes = {p["pergunta"].lower() for p in base}
+    novas_validas = [p for p in novas_perguntas if p["pergunta"].lower() not in perguntas_existentes]
+    if novas_validas:
+        base.extend(novas_validas)
+        with open("base_conhecimento.json", "w", encoding="utf-8") as f:
+            json.dump(base, f, ensure_ascii=False, indent=2)
+
 # ▶️ Interface Streamlit
 st.title("💬 Assistente DECivil")
 
