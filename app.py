@@ -21,8 +21,11 @@ def carregar_base_manual():
 def carregar_base_docs():
     try:
         with open("base_docs_vectorizada.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
+            conteudo = f.read().strip()
+            if not conteudo:
+                return []
+            return json.loads(conteudo)
+    except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 # Base de histórico de perguntas
