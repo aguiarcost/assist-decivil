@@ -6,8 +6,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 from preparar_documentos_streamlit import processar_documentos
 import os
 
-# Chave da API
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Chave da API (verifica se está definida nos segredos)
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+else:
+    st.error("🔐 A chave da API da OpenAI não está definida nos segredos. Por favor, adicione OPENAI_API_KEY ao ficheiro secrets.toml.")
 
 # Base de conhecimento manual
 def carregar_base_manual():
@@ -21,11 +24,8 @@ def carregar_base_manual():
 def carregar_base_docs():
     try:
         with open("base_docs_vectorizada.json", "r", encoding="utf-8") as f:
-            conteudo = f.read().strip()
-            if not conteudo:
-                return []
-            return json.loads(conteudo)
-    except (FileNotFoundError, json.JSONDecodeError):
+            return json.load(f)
+    except FileNotFoundError:
         return []
 
 # Base de histórico de perguntas
@@ -34,12 +34,19 @@ def guardar_pergunta_no_historico(pergunta):
     try:
         with open(historico_path, "r", encoding="utf-8") as f:
             historico = json.load(f)
-    except FileNotFoundError:
+    except (FileNotFoundError, json.decoder.JSONDecodeError):
         historico = []
 
     historico.append({"pergunta": pergunta})
     with open(historico_path, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
+
+# Adicionar novas perguntas à base manual
+def adicionar_perguntas_base_manual(novas_perguntas):
+    base_manual = carregar_base_manual()
+    base_manual.extend(novas_perguntas)
+    with open("base_conhecimento.json", "w", encoding="utf-8") as f:
+        json.dump(base_manual, f, ensure_ascii=False, indent=2)
 
 base_manual = carregar_base_manual()
 base_docs = carregar_base_docs()
@@ -60,7 +67,7 @@ def procurar_blocos_embedding(embedding_pergunta, top_n=3):
     pergunta_vector = np.array(embedding_pergunta).reshape(1, -1)
     similaridades = cosine_similarity(pergunta_vector, docs_embeddings)[0]
     indices_top = np.argsort(similaridades)[-top_n:][::-1]
-    return [base_docs[i] for i in indices_top]
+    return [(base_docs[i], similaridades[i]) for i in indices_top]
 
 # Encontrar blocos por palavras-chave
 def procurar_blocos_palavras(pergunta, top_n=2):
@@ -74,11 +81,20 @@ def procurar_blocos_palavras(pergunta, top_n=2):
     blocos_ordenados = sorted(blocos_com_score, key=lambda x: x[0], reverse=True)
     return [bloco for _, bloco in blocos_ordenados[:top_n]]
 
+# Função para reformular a pergunta
+def reformular_pergunta(pergunta):
+    prompt = f"Reformula de forma mais clara e objetiva a seguinte pergunta: {pergunta}"
+    resposta = openai.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+    return resposta.choices[0].message.content
+
 # Função principal de resposta
 def gerar_resposta(pergunta):
     pergunta_lower = pergunta.lower()
 
-    # Lista de funcionalidades
     if any(x in pergunta_lower for x in [
         "o que podes fazer", "que sabes fazer", "para que serves",
         "lista de coisas", "ajudas com", "que tipo de", "funcionalidades"
@@ -111,26 +127,38 @@ Podes perguntar, por exemplo:
     for entrada in base_manual:
         if entrada["pergunta"].lower() in pergunta_lower:
             guardar_pergunta_no_historico(pergunta)
-            return f"""
+            resposta = f"""
 **❓ Pergunta:** {entrada['pergunta']}
 
-**💬 Resposta:** {entrada['resposta']}
-
-**📧 Email de contacto:** [{entrada['email']}](mailto:{entrada['email']})
-
-**📝 Modelo de email sugerido:**
-```text
-{entrada['modelo_email']}
-```
-"""
+**💬 Resposta:** {entrada['resposta']}"""
+            if entrada.get("email"):
+                resposta += f"\n**📧 Email de contacto:** [{entrada['email']}](mailto:{entrada['email']})"
+            if entrada.get("modelo_email"):
+                resposta += f"\n\n**📝 Modelo de email sugerido:**\n```text\n{entrada['modelo_email']}\n```"
+            return resposta
 
     embedding = gerar_embedding(pergunta)
     blocos_embedding = procurar_blocos_embedding(embedding)
     blocos_keywords = procurar_blocos_palavras(pergunta)
-    blocos_relevantes = blocos_embedding + [b for b in blocos_keywords if b not in blocos_embedding]
+    blocos_relevantes = [b for b, _ in blocos_embedding] + [b for b in blocos_keywords if b not in [be for be, _ in blocos_embedding]]
 
     if not blocos_relevantes:
         guardar_pergunta_no_historico(pergunta)
+        st.info("ℹ️ Não encontrei resposta direta. Queres reformular a pergunta ou explorar os documentos?")
+
+        if st.button("🔄 Reformular pergunta"):
+            nova_pergunta = reformular_pergunta(pergunta)
+            st.text_input("Sugestão de reformulação:", value=nova_pergunta, key="ref")
+
+        if st.button("Mostrar blocos mais próximos"):
+            with st.expander("🔍 Blocos semelhantes encontrados", expanded=True):
+                blocos_semelhantes = procurar_blocos_embedding(embedding, top_n=5)
+                for bloco, score in blocos_semelhantes:
+                    origem = bloco.get("origem", "desconhecida")
+                    pagina = bloco.get("pagina", "?")
+                    st.markdown(f"**Fonte**: {origem}, página {pagina}, Similaridade: {score:.2f}")
+                    st.code(bloco['texto'][:500] + ("..." if len(bloco['texto']) > 500 else ""), language="markdown")
+
         return "❌ Não encontrei informação suficiente para responder a isso."
 
     contexto = "\n\n".join([b["texto"] for b in blocos_relevantes])
@@ -155,22 +183,13 @@ Se não encontrares resposta, diz que não tens informação suficiente.
     guardar_pergunta_no_historico(pergunta)
 
     with st.expander("🔍 Blocos usados para gerar a resposta", expanded=False):
-        for bloco in blocos_relevantes:
+        for bloco, score in blocos_embedding:
             origem = bloco.get("origem", "desconhecida")
             pagina = bloco.get("pagina", "?")
-            st.markdown(f"**Fonte**: {origem}, página {pagina}")
+            st.markdown(f"**Fonte**: {origem}, página {pagina}, Similaridade: {score:.2f}")
             st.code(bloco['texto'][:500] + ("..." if len(bloco['texto']) > 500 else ""), language="markdown")
 
     return resposta_final
-
-def adicionar_perguntas_base_manual(novas_perguntas):
-    base = carregar_base_manual()
-    perguntas_existentes = {p["pergunta"].lower() for p in base}
-    novas_validas = [p for p in novas_perguntas if p["pergunta"].lower() not in perguntas_existentes]
-    if novas_validas:
-        base.extend(novas_validas)
-        with open("base_conhecimento.json", "w", encoding="utf-8") as f:
-            json.dump(base, f, ensure_ascii=False, indent=2)
 
 # ▶️ Interface Streamlit
 st.title("💬 Assistente DECivil")
@@ -193,6 +212,23 @@ if arquivos:
         processar_documentos(arquivo)
     st.success("Documentos processados com sucesso. Por favor, volte a fazer a pergunta.")
     base_docs = carregar_base_docs()
+
+# ⬆️ Upload de ficheiro com perguntas/respostas
+st.markdown("---")
+st.markdown("### ➕ Importar novas perguntas para a base de conhecimento")
+novo_json = st.file_uploader("Carregue ficheiro JSON com novas perguntas:", type="json")
+
+if novo_json:
+    try:
+        novas_perguntas = json.load(novo_json)
+        if isinstance(novas_perguntas, list):
+            adicionar_perguntas_base_manual(novas_perguntas)
+            st.success("Perguntas adicionadas com sucesso.")
+            base_manual = carregar_base_manual()
+        else:
+            st.error("O ficheiro JSON deve conter uma lista de objetos com perguntas.")
+    except Exception as e:
+        st.error(f"Erro ao carregar JSON: {e}")
 
 # 💬 Responder à pergunta
 if pergunta_final:
