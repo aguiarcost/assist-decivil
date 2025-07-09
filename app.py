@@ -134,7 +134,7 @@ Podes perguntar, por exemplo:
             if entrada.get("email"):
                 resposta += f"\n**📧 Email de contacto:** [{entrada['email']}](mailto:{entrada['email']})"
             if entrada.get("modelo_email"):
-                resposta += f"\n\n**📝 Modelo de email sugerido:**\n```text\n{entrada['modelo_email']}\n```"
+                resposta += f"\n\n**📜 Modelo de email sugerido:**\n```text\n{entrada['modelo_email']}\n```"
             return resposta
 
     embedding = gerar_embedding(pergunta)
@@ -235,3 +235,4 @@ if pergunta_final:
     resposta = gerar_resposta(pergunta_final)
     st.markdown("### 🔄 Resposta:")
     st.markdown(resposta)
+
