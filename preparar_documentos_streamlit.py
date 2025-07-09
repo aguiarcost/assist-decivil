@@ -8,11 +8,15 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 
-# Chave da API
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Obter chave da API
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+else:
+    st.error("🔐 A chave da API da OpenAI não está definida nos segredos. Por favor, adicione OPENAI_API_KEY ao ficheiro secrets.toml.")
 
 CAMINHO_BASE = "base_docs_vectorizada.json"
 
+# Função auxiliar: gerar embedding
 def gerar_embedding(texto):
     response = openai.embeddings.create(
         input=texto,
@@ -20,17 +24,22 @@ def gerar_embedding(texto):
     )
     return response.data[0].embedding
 
-def guardar_embedding(texto, embedding):
+# Função auxiliar: guardar texto e embedding
+def guardar_embedding(texto, embedding, origem="upload", pagina="?"):
     if os.path.exists(CAMINHO_BASE):
-        with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
-            base = json.load(f)
+        try:
+            with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
+                base = json.load(f)
+        except json.JSONDecodeError:
+            base = []
     else:
         base = []
 
-    base.append({"texto": texto, "embedding": embedding})
+    base.append({"origem": origem, "pagina": pagina, "texto": texto, "embedding": embedding})
     with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
         json.dump(base, f, ensure_ascii=False, indent=2)
 
+# Funções de extração de texto
 def extrair_texto(file):
     if isinstance(file, str) and file.startswith("http"):
         return extrair_texto_website(file)
@@ -65,25 +74,20 @@ def extrair_texto_website(url):
     textos = soup.stripped_strings
     return "\n".join(textos)
 
-# ✅ Função principal para múltiplos uploads ou links
-def processar_documentos(file_or_url_list):
-    if not isinstance(file_or_url_list, list):
-        file_or_url_list = [file_or_url_list]
+# Função principal para processar e guardar documento
+def processar_documentos(file_or_url):
+    try:
+        texto = extrair_texto(file_or_url)
+    except Exception as e:
+        st.error(f"Erro ao extrair texto: {e}")
+        return
 
-    for item in file_or_url_list:
-        try:
-            texto = extrair_texto(item)
-            blocos = [texto[i:i+1000] for i in range(0, len(texto), 1000)]
+    blocos = [texto[i:i+1000] for i in range(0, len(texto), 1000)]
 
-            for bloco in blocos:
-                if bloco.strip():
-                    embedding = gerar_embedding(bloco)
-                    guardar_embedding(bloco, embedding)
-
-            if isinstance(item, str):
-                st.success(f"✅ Conteúdo do website processado: {item}")
-            else:
-                st.success(f"✅ Ficheiro processado: {item.name}")
-
-        except Exception as e:
-            st.error(f"❌ Erro ao processar {item if isinstance(item, str) else item.name}: {e}")
+    for bloco in blocos:
+        if bloco.strip():
+            try:
+                embedding = gerar_embedding(bloco)
+                guardar_embedding(bloco, embedding)
+            except Exception as e:
+                st.warning(f"Erro ao gerar embedding para bloco: {e}")
