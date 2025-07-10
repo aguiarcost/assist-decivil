@@ -2,9 +2,9 @@ import streamlit as st
 import json
 import os
 import openai
-from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from datetime import datetime
+from assistente import gerar_resposta
 
 # Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
@@ -22,8 +22,11 @@ else:
 @st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return []
     return []
 
 # Função auxiliar: guardar histórico
@@ -49,7 +52,25 @@ st.title("📘 Assistente Administrativo DECivil")
 col1, col2 = st.columns(2)
 
 base_conhecimento = carregar_base_conhecimento()
-perguntas_existentes = sorted(set(p["pergunta"] for p in base_conhecimento))
+frequencia = {}
+
+# Construir dicionário de frequência de uso
+if os.path.exists(CAMINHO_HISTORICO):
+    try:
+        with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
+            historico = json.load(f)
+            for item in historico:
+                p = item.get("pergunta")
+                if p:
+                    frequencia[p] = frequencia.get(p, 0) + 1
+    except json.JSONDecodeError:
+        pass
+
+# Ordenar perguntas por frequência de uso
+perguntas_existentes = sorted(
+    set(p["pergunta"] for p in base_conhecimento),
+    key=lambda x: -frequencia.get(x, 0)
+)
 
 with col1:
     pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
@@ -101,10 +122,11 @@ if novo_json:
         novas_perguntas = json.load(novo_json)
         if isinstance(novas_perguntas, list):
             base_existente = carregar_base_conhecimento()
-            base_existente += novas_perguntas
-            base_existente = list({p["pergunta"]: p for p in base_existente}.values())  # Elimina duplicados
+            todas = {p["pergunta"]: p for p in base_existente}
+            for nova in novas_perguntas:
+                todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-                json.dump(base_existente, f, ensure_ascii=False, indent=2)
+                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             st.success("✅ Base de conhecimento atualizada.")
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
