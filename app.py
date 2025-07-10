@@ -20,7 +20,7 @@ else:
     st.warning("⚠️ A chave da API não está definida.")
 
 # Função auxiliar: carregar perguntas frequentes
-@st.cache_data
+
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
