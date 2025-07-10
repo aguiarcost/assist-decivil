@@ -3,64 +3,54 @@ import json
 from PyPDF2 import PdfReader
 import openai
 
-# Lê a chave da API (ambiente ou ficheiro de configuração)
+# Caminho da base de dados vetorizada
+CAMINHO_BASE = "base_vectorizada.json"
+DIRETORIO = "documentos"  # Diretório onde estão os PDFs
+
+# Chave da API
 openai.api_key = os.getenv("OPENAI_API_KEY", "")
 
-# Diretório de entrada e saída
-DIRETORIO_DOCUMENTOS = "documentos"
-CAMINHO_BASE = "base_docs_vectorizada.json"
-
-# Função para extrair texto por página de um PDF
+# Extrair texto de um PDF, página por página
 def extrair_blocos_pdf(caminho):
     reader = PdfReader(caminho)
     blocos = []
     for i, pagina in enumerate(reader.pages):
         texto = pagina.extract_text()
         if texto:
-            blocos.append({
-                "origem": os.path.basename(caminho),
-                "pagina": i + 1,
-                "texto": texto.strip()
-            })
+            texto = texto.strip()
+            sub_blocos = [texto[j:j+1000] for j in range(0, len(texto), 1000)]
+            for sub_bloco in sub_blocos:
+                blocos.append({
+                    "origem": os.path.basename(caminho),
+                    "pagina": i + 1,
+                    "texto": sub_bloco
+                })
     return blocos
 
-# Função para gerar embeddings com verificação
-def gerar_embedding(texto):
-    try:
-        resposta = openai.embeddings.create(
-            input=texto,
-            model="text-embedding-3-small"
-        )
-        return resposta.data[0].embedding
-    except Exception as e:
-        print(f"Erro a gerar embedding: {e}")
-        return None
+# Processar todos os PDFs e gerar embeddings
+base = []
+for ficheiro in os.listdir(DIRETORIO):
+    if ficheiro.endswith(".pdf"):
+        caminho = os.path.join(DIRETORIO, ficheiro)
+        blocos = extrair_blocos_pdf(caminho)
+        for bloco in blocos:
+            try:
+                resposta = openai.embeddings.create(
+                    input=bloco["texto"],
+                    model="text-embedding-3-small"
+                )
+                embedding = resposta.data[0].embedding
+                base.append({
+                    "origem": bloco["origem"],
+                    "pagina": bloco["pagina"],
+                    "texto": bloco["texto"],
+                    "embedding": embedding
+                })
+            except Exception as e:
+                print(f"❌ Erro na página {bloco['pagina']} do ficheiro {bloco['origem']}: {e}")
 
-# Função principal para processar documentos do diretório
-def processar_documentos():
-    todos_blocos = []
-    for ficheiro in os.listdir(DIRETORIO_DOCUMENTOS):
-        if ficheiro.endswith(".pdf"):
-            caminho = os.path.join(DIRETORIO_DOCUMENTOS, ficheiro)
-            blocos = extrair_blocos_pdf(caminho)
-            todos_blocos.extend(blocos)
+# Guardar a base vetorizada
+with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
+    json.dump(base, f, ensure_ascii=False, indent=2)
 
-    base = []
-    for bloco in todos_blocos:
-        embedding = gerar_embedding(bloco["texto"])
-        if embedding:
-            base.append({
-                "origem": bloco["origem"],
-                "pagina": bloco["pagina"],
-                "texto": bloco["texto"],
-                "embedding": embedding
-            })
-
-    with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
-        json.dump(base, f, ensure_ascii=False, indent=2)
-
-    print(f"✅ {len(base)} blocos guardados em {CAMINHO_BASE}")
-
-# Execução direta
-if __name__ == "__main__":
-    processar_documentos()
+print(f"✅ {len(base)} blocos processados e guardados em {CAMINHO_BASE}")
