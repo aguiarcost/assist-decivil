@@ -2,9 +2,9 @@ import streamlit as st
 import json
 import os
 import openai
+from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from datetime import datetime
-from assistente import gerar_resposta
 
 # Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
@@ -122,9 +122,11 @@ if novo_json:
         novas_perguntas = json.load(novo_json)
         if isinstance(novas_perguntas, list):
             base_existente = carregar_base_conhecimento()
-            todas = {p["pergunta"]: p for p in base_existente}
+            todas = {p["pergunta"].strip(): p for p in base_existente if "pergunta" in p}
             for nova in novas_perguntas:
-                todas[nova["pergunta"]] = nova
+                nova_pergunta = nova.get("pergunta", "").strip()
+                if nova_pergunta:
+                    todas[nova_pergunta] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             st.success("✅ Base de conhecimento atualizada.")
