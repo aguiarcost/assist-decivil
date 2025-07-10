@@ -1,59 +1,38 @@
-import fitz  # PyMuPDF para PDF
-import docx  # para .docx
 import os
 import json
-import numpy as np
-import openai
-import streamlit as st
+import fitz  # PyMuPDF para PDFs
+import docx
 import requests
 from bs4 import BeautifulSoup
+import openai
+
+# Definir caminho da base vetorizada
+CAMINHO_BASE = "base_vectorizada.json"
 
 # Obter chave da API
-if "OPENAI_API_KEY" in st.secrets:
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
-else:
-    st.error("🔐 A chave da API da OpenAI não está definida nos segredos. Por favor, adicione OPENAI_API_KEY ao ficheiro secrets.toml.")
+openai.api_key = os.getenv("OPENAI_API_KEY", "")
 
-CAMINHO_BASE = "base_docs_vectorizada.json"
-
-# Função auxiliar: gerar embedding
+# Função para gerar embeddings
 def gerar_embedding(texto):
-    response = openai.embeddings.create(
+    resposta = openai.embeddings.create(
         input=texto,
         model="text-embedding-3-small"
     )
-    return response.data[0].embedding
+    return resposta.data[0].embedding
 
-# Função auxiliar: guardar texto e embedding
-def guardar_embedding(texto, embedding, origem="upload", pagina="?"):
+# Guardar texto com embedding
+def guardar_embedding(texto, embedding, origem="Desconhecido"):
     if os.path.exists(CAMINHO_BASE):
-        try:
-            with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
-                base = json.load(f)
-        except json.JSONDecodeError:
-            base = []
+        with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
+            base = json.load(f)
     else:
         base = []
 
-    base.append({"origem": origem, "pagina": pagina, "texto": texto, "embedding": embedding})
+    base.append({"texto": texto, "embedding": embedding, "origem": origem})
     with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
         json.dump(base, f, ensure_ascii=False, indent=2)
 
-# Funções de extração de texto
-def extrair_texto(file):
-    if isinstance(file, str) and file.startswith("http"):
-        return extrair_texto_website(file)
-
-    nome = file.name.lower()
-    if nome.endswith(".pdf"):
-        return extrair_texto_pdf(file)
-    elif nome.endswith(".docx"):
-        return extrair_texto_docx(file)
-    elif nome.endswith(".txt"):
-        return extrair_texto_txt(file)
-    else:
-        raise ValueError("Tipo de ficheiro não suportado.")
-
+# Extrair texto de PDF
 def extrair_texto_pdf(file):
     texto = ""
     with fitz.open(stream=file.read(), filetype="pdf") as doc:
@@ -61,33 +40,45 @@ def extrair_texto_pdf(file):
             texto += page.get_text()
     return texto
 
+# Extrair texto de DOCX
 def extrair_texto_docx(file):
     doc = docx.Document(file)
-    return "\n".join([para.text for para in doc.paragraphs])
+    return "\n".join([p.text for p in doc.paragraphs])
 
+# Extrair texto de TXT
 def extrair_texto_txt(file):
     return file.read().decode("utf-8")
 
+# Extrair texto de um website
 def extrair_texto_website(url):
-    resposta = requests.get(url)
-    soup = BeautifulSoup(resposta.content, "html.parser")
-    textos = soup.stripped_strings
-    return "\n".join(textos)
-
-# Função principal para processar e guardar documento
-def processar_documentos(file_or_url):
     try:
-        texto = extrair_texto(file_or_url)
-    except Exception as e:
-        st.error(f"Erro ao extrair texto: {e}")
-        return
+        resposta = requests.get(url)
+        soup = BeautifulSoup(resposta.content, "html.parser")
+        textos = soup.stripped_strings
+        return "\n".join(textos)
+    except:
+        return ""
 
+# Função para processar qualquer tipo de entrada
+def processar_documento(file_or_url):
+    if isinstance(file_or_url, str) and file_or_url.startswith("http"):
+        texto = extrair_texto_website(file_or_url)
+        origem = file_or_url
+    else:
+        nome = file_or_url.name.lower()
+        if nome.endswith(".pdf"):
+            texto = extrair_texto_pdf(file_or_url)
+        elif nome.endswith(".docx"):
+            texto = extrair_texto_docx(file_or_url)
+        elif nome.endswith(".txt"):
+            texto = extrair_texto_txt(file_or_url)
+        else:
+            raise ValueError("Tipo de ficheiro não suportado.")
+        origem = nome
+
+    # Dividir em blocos de 1000 caracteres
     blocos = [texto[i:i+1000] for i in range(0, len(texto), 1000)]
-
     for bloco in blocos:
         if bloco.strip():
-            try:
-                embedding = gerar_embedding(bloco)
-                guardar_embedding(bloco, embedding)
-            except Exception as e:
-                st.warning(f"Erro ao gerar embedding para bloco: {e}")
+            embedding = gerar_embedding(bloco)
+            guardar_embedding(bloco, embedding, origem=origem)
