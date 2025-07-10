@@ -1,15 +1,16 @@
+import streamlit as st
 import json
 import os
 import openai
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-import streamlit as st
+from assistente import gerar_resposta
+from preparar_documentos_streamlit import processar_documento
+from datetime import datetime
 
-# Caminhos de ficheiros
+# Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_DOCS = "base_vectorizada.json"
+CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Chave da API
+# Chave da API (ambiente ou Streamlit Cloud)
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -17,15 +18,8 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Gerar embedding para texto
-def gerar_embedding(texto):
-    resposta = openai.embeddings.create(
-        input=texto,
-        model="text-embedding-3-small"
-    )
-    return resposta.data[0].embedding
-
-# Carregar base manual
+# Função auxiliar: carregar perguntas frequentes
+@st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
@@ -35,61 +29,131 @@ def carregar_base_conhecimento():
             return []
     return []
 
-# Carregar base vetorial
-def carregar_base_docs():
-    if os.path.exists(CAMINHO_DOCS):
+# Função auxiliar: guardar histórico
+def guardar_pergunta_no_historico(pergunta):
+    registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
+    if os.path.exists(CAMINHO_HISTORICO):
         try:
-            with open(CAMINHO_DOCS, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
+                historico = json.load(f)
         except json.JSONDecodeError:
-            return []
-    return []
+            historico = []
+    else:
+        historico = []
+    historico.append(registo)
+    with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
+        json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Procurar blocos mais relevantes
-def procurar_blocos_relevantes(embedding_pergunta, base_docs, top_n=3):
-    if not base_docs:
-        return []
+# Interface principal
+st.set_page_config(page_title="Assistente DECivil", layout="wide")
+st.title("📘 Assistente Administrativo DECivil")
 
-    docs_embeddings = np.array([bloco["embedding"] for bloco in base_docs])
-    pergunta_vector = np.array(embedding_pergunta).reshape(1, -1)
-    similaridades = cosine_similarity(pergunta_vector, docs_embeddings)[0]
-    indices_top = np.argsort(similaridades)[-top_n:][::-1]
+# Colunas para perguntas
+col1, col2 = st.columns(2)
 
-    blocos = []
-    for i in indices_top:
-        bloco = base_docs[i]
-        bloco_copy = bloco.copy()
-        bloco_copy["similaridade"] = round(float(similaridades[i]), 3)
-        blocos.append(bloco_copy)
-    return blocos
+base_conhecimento = carregar_base_conhecimento()
+frequencia = {}
 
-# Gerar resposta
-def gerar_resposta(pergunta):
-    pergunta_lower = pergunta.lower()
-    base_manual = carregar_base_conhecimento()
-    base_docs = carregar_base_docs()
+# Construir dicionário de frequência de uso
+if os.path.exists(CAMINHO_HISTORICO):
+    try:
+        with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
+            historico = json.load(f)
+            for item in historico:
+                p = item.get("pergunta")
+                if p:
+                    frequencia[p] = frequencia.get(p, 0) + 1
+    except json.JSONDecodeError:
+        pass
 
-    # Verificar se a pergunta está na base manual
-    for entrada in base_manual:
-        if entrada["pergunta"].lower().strip() == pergunta_lower.strip():
-            resposta = entrada["resposta"]
-            email = entrada.get("email")
-            modelo = entrada.get("modelo_email")
+# Ordenar perguntas por frequência de uso
+perguntas_existentes = sorted(
+    set(p["pergunta"] for p in base_conhecimento),
+    key=lambda x: -frequencia.get(x, 0)
+)
 
-            resultado = f"**❓ Pergunta:** {entrada['pergunta']}\n\n"
-            resultado += f"**💬 Resposta:** {resposta}\n\n"
-            if email:
-                resultado += f"**📧 Email de contacto:** [{email}](mailto:{email})\n\n"
-            if modelo:
-                resultado += f"**📝 Modelo de email sugerido:**\n\n```\n{modelo}\n```"
-            return resultado
+with col1:
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
+with col2:
+    pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
 
-    # Se não estiver na base manual, procurar nos documentos
-    embedding_pergunta = gerar_embedding(pergunta)
-    blocos_relevantes = procurar_blocos_relevantes(embedding_pergunta, base_docs)
+pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
-    if blocos_relevantes:
-        resposta = "\n\n".join([f"**Trecho relevante:**\n{bloco['texto']}\n\n_Similaridade: {bloco['similaridade']}_" for bloco in blocos_relevantes])
-        return resposta
+resposta = ""
+if pergunta_final:
+    resposta = gerar_resposta(pergunta_final)
+    guardar_pergunta_no_historico(pergunta_final)
 
-    return "❌ Não foi encontrada resposta para a pergunta. Por favor, tente reformular ou contacte os serviços administrativos."
+# Mostrar a resposta logo após a pergunta, e não após uploads
+if resposta:
+    st.markdown("---")
+    st.subheader("💡 Resposta do assistente")
+    st.markdown(resposta)
+
+# Secção de upload de documentos
+st.markdown("---")
+st.subheader("📎 Adicionar documentos ou links")
+col3, col4 = st.columns(2)
+
+with col3:
+    ficheiro = st.file_uploader("Upload de ficheiro (.pdf, .docx, .txt)", type=["pdf", "docx", "txt"])
+    if ficheiro:
+        try:
+            processar_documento(ficheiro)
+            st.success("✅ Documento processado com sucesso.")
+        except Exception as e:
+            st.error(f"Erro: {e}")
+
+with col4:
+    url = st.text_input("Ou insira um link para processar conteúdo:")
+    if st.button("📥 Processar URL") and url:
+        try:
+            processar_documento(url)
+            st.success("✅ Conteúdo do link processado com sucesso.")
+        except Exception as e:
+            st.error(f"Erro: {e}")
+
+# Upload de novas perguntas/respostas
+st.markdown("---")
+st.subheader("📝 Atualizar base de conhecimento com ficheiro")
+novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
+if novo_json:
+    try:
+        novas_perguntas = json.load(novo_json)
+        if isinstance(novas_perguntas, list):
+            base_existente = carregar_base_conhecimento()
+            todas = {p["pergunta"]: p for p in base_existente}
+            for nova in novas_perguntas:
+                todas[nova["pergunta"]] = nova
+            with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
+                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+            st.success("✅ Base de conhecimento atualizada.")
+        else:
+            st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
+    except Exception as e:
+        st.error(f"Erro ao ler ficheiro JSON: {e}")
+
+# Adição manual de novas perguntas com autenticação
+st.markdown("---")
+st.subheader("➕ Adicionar nova pergunta manualmente")
+with st.expander("Adicionar nova pergunta (requer código de autorização)"):
+    codigo = st.text_input("Código de autorização", type="password")
+    if codigo == "decivil2024":
+        nova_pergunta = st.text_input("Pergunta nova")
+        nova_resposta = st.text_area("Resposta")
+        novo_email = st.text_input("Email de contacto (opcional)")
+        modelo_email = st.text_area("Modelo de email sugerido (opcional)")
+        if st.button("💾 Guardar nova pergunta") and nova_pergunta and nova_resposta:
+            base_existente = carregar_base_conhecimento()
+            todas = {p["pergunta"]: p for p in base_existente}
+            todas[nova_pergunta] = {
+                "pergunta": nova_pergunta,
+                "resposta": nova_resposta,
+                "email": novo_email,
+                "modelo_email": modelo_email
+            }
+            with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
+                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+            st.success("✅ Nova pergunta adicionada com sucesso.")
+    elif codigo:
+        st.error("Código incorreto.")
