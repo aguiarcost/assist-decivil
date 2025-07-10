@@ -114,31 +114,54 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Secção de inserção manual de novas perguntas
+# Upload de novas perguntas/respostas
 st.markdown("---")
-with st.expander("🛠️ Inserir nova pergunta manualmente"):
-    with st.form("form_nova_pergunta"):
-        codigo = st.text_input("Código de autorização:", type="password")
-        nova_pergunta = st.text_input("Pergunta:")
-        nova_resposta = st.text_area("Resposta:")
-        novo_email = st.text_input("Email de contacto (opcional):")
-        modelo_email = st.text_area("Modelo de email sugerido (opcional):")
-        submeter = st.form_submit_button("💾 Adicionar à base de conhecimento")
+st.subheader("📝 Atualizar base de conhecimento")
+novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
+if novo_json:
+    try:
+        novas_perguntas = json.load(novo_json)
+        if isinstance(novas_perguntas, list):
+            base_existente = carregar_base_conhecimento()
+            todas = {p["pergunta"]: p for p in base_existente}
+            for nova in novas_perguntas:
+                todas[nova["pergunta"]] = nova
+            with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
+                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+            st.success("✅ Base de conhecimento atualizada.")
+        else:
+            st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
+    except Exception as e:
+        st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-        if submeter:
-            if codigo != CODIGO_AUTORIZACAO:
-                st.error("❌ Código de autorização incorreto.")
-            elif not nova_pergunta or not nova_resposta:
-                st.warning("⚠️ Por favor preencha pergunta e resposta.")
-            else:
-                base = carregar_base_conhecimento()
-                todas = {p["pergunta"]: p for p in base}
-                todas[nova_pergunta] = {
+# Inserção manual (requer código)
+st.markdown("---")
+st.subheader("➕ Inserir manualmente uma nova pergunta")
+with st.expander("Adicionar nova pergunta/resposta manualmente"):
+    with st.form("form_manual"):
+        codigo = st.text_input("Código de autorização")
+        nova_pergunta = st.text_input("Pergunta")
+        nova_resposta = st.text_area("Resposta")
+        novo_email = st.text_input("Email de contacto (opcional)")
+        novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
+        submeter = st.form_submit_button("Adicionar")
+
+    if submeter:
+        if codigo == CODIGO_AUTORIZACAO:
+            if nova_pergunta and nova_resposta:
+                nova_entrada = {
                     "pergunta": nova_pergunta,
                     "resposta": nova_resposta,
                     "email": novo_email,
-                    "modelo_email": modelo_email
+                    "modelo_email": novo_modelo
                 }
+                base_existente = carregar_base_conhecimento()
+                todas = {p["pergunta"]: p for p in base_existente}
+                todas[nova_pergunta] = nova_entrada
                 with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                     json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-                st.success("✅ Nova pergunta adicionada com sucesso.")
+                st.success("✅ Nova pergunta adicionada à base de conhecimento.")
+            else:
+                st.warning("Por favor preencha a pergunta e a resposta.")
+        else:
+            st.error("Código de autorização inválido.")
