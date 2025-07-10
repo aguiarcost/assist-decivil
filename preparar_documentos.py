@@ -11,7 +11,6 @@ DIRETORIO_DOCUMENTOS = "documentos"
 CAMINHO_BASE = "base_docs_vectorizada.json"
 
 # Função para extrair texto por página de um PDF
-
 def extrair_blocos_pdf(caminho):
     reader = PdfReader(caminho)
     blocos = []
@@ -26,7 +25,6 @@ def extrair_blocos_pdf(caminho):
     return blocos
 
 # Função para gerar embeddings com verificação
-
 def gerar_embedding(texto):
     try:
         resposta = openai.embeddings.create(
@@ -39,7 +37,6 @@ def gerar_embedding(texto):
         return None
 
 # Função principal para processar documentos do diretório
-
 def processar_documentos():
     todos_blocos = []
     for ficheiro in os.listdir(DIRETORIO_DOCUMENTOS):
@@ -65,6 +62,5 @@ def processar_documentos():
     print(f"✅ {len(base)} blocos guardados em {CAMINHO_BASE}")
 
 # Execução direta
-
 if __name__ == "__main__":
     processar_documentos()
