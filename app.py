@@ -20,7 +20,7 @@ else:
     st.warning("⚠️ A chave da API não está definida.")
 
 # Função auxiliar: carregar perguntas frequentes
-
+@st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
@@ -133,8 +133,7 @@ if novo_json:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
-st.cache_data.clear()
-st.rerun()
+
 # Inserção manual (requer código)
 st.markdown("---")
 st.subheader("➕ Inserir manualmente uma nova pergunta")
@@ -166,3 +165,4 @@ with st.expander("Adicionar nova pergunta/resposta manualmente"):
                 st.warning("Por favor preencha a pergunta e a resposta.")
         else:
             st.error("Código de autorização inválido.")
+
