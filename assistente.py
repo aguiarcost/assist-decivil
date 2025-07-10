@@ -3,87 +3,93 @@ import os
 import openai
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+import streamlit as st
 
-# Obter chave da API
-openai.api_key = os.getenv("OPENAI_API_KEY", "")
+# Caminhos de ficheiros
+CAMINHO_CONHECIMENTO = "base_conhecimento.json"
+CAMINHO_DOCS = "base_vectorizada.json"
 
-# Caminho para base vetorizada\NCAMINHO_BASE = "base_docs_vectorizada.json"
+# Chave da API
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+elif os.getenv("OPENAI_API_KEY"):
+    openai.api_key = os.getenv("OPENAI_API_KEY"])
+else:
+    st.warning("⚠️ A chave da API não está definida.")
 
-# Função auxiliar: gerar embedding
+# Gerar embedding para texto
 def gerar_embedding(texto):
-    response = openai.embeddings.create(
+    resposta = openai.embeddings.create(
         input=texto,
         model="text-embedding-3-small"
     )
-    return response.data[0].embedding
+    return resposta.data[0].embedding
 
-# Função auxiliar: guardar texto e embedding
-def guardar_embedding(texto, embedding):
-    if os.path.exists(CAMINHO_BASE):
-        with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
-            try:
-                base = json.load(f)
-            except json.JSONDecodeError:
-                base = []
-    else:
-        base = []
+# Carregar base manual
+def carregar_base_conhecimento():
+    if os.path.exists(CAMINHO_CONHECIMENTO):
+        try:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return []
+    return []
 
-    base.append({"texto": texto, "embedding": embedding})
-    with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
-        json.dump(base, f, ensure_ascii=False, indent=2)
+# Carregar base vetorial
+def carregar_base_docs():
+    if os.path.exists(CAMINHO_DOCS):
+        try:
+            with open(CAMINHO_DOCS, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return []
+    return []
 
-# Função para extrair texto de ficheiros ou URLs
-def extrair_texto(file):
-    if isinstance(file, str) and file.startswith("http"):
-        return extrair_texto_website(file)
+# Procurar blocos mais relevantes
+def procurar_blocos_relevantes(embedding_pergunta, base_docs, top_n=3):
+    if not base_docs:
+        return []
 
-    nome = file.name.lower()
-    if nome.endswith(".pdf"):
-        return extrair_texto_pdf(file)
-    elif nome.endswith(".docx"):
-        return extrair_texto_docx(file)
-    elif nome.endswith(".txt"):
-        return extrair_texto_txt(file)
-    else:
-        raise ValueError("Tipo de ficheiro não suportado.")
+    docs_embeddings = np.array([bloco["embedding"] for bloco in base_docs])
+    pergunta_vector = np.array(embedding_pergunta).reshape(1, -1)
+    similaridades = cosine_similarity(pergunta_vector, docs_embeddings)[0]
+    indices_top = np.argsort(similaridades)[-top_n:][::-1]
 
-# PDF
-import fitz  # PyMuPDF
+    blocos = []
+    for i in indices_top:
+        bloco = base_docs[i]
+        bloco_copy = bloco.copy()
+        bloco_copy["similaridade"] = round(float(similaridades[i]), 3)
+        blocos.append(bloco_copy)
+    return blocos
 
-def extrair_texto_pdf(file):
-    texto = ""
-    with fitz.open(stream=file.read(), filetype="pdf") as doc:
-        for page in doc:
-            texto += page.get_text()
-    return texto
+# Gerar resposta
+def gerar_resposta(pergunta):
+    pergunta_lower = pergunta.lower()
+    base_manual = carregar_base_conhecimento()
+    base_docs = carregar_base_docs()
 
-# DOCX
-import docx
+    # Verificar se a pergunta está na base manual
+    for entrada in base_manual:
+        if entrada["pergunta"].lower().strip() == pergunta_lower.strip():
+            resposta = entrada["resposta"]
+            email = entrada.get("email")
+            modelo = entrada.get("modelo_email")
 
-def extrair_texto_docx(file):
-    doc = docx.Document(file)
-    return "\n".join([para.text for para in doc.paragraphs])
+            resultado = f"**❓ Pergunta:** {entrada['pergunta']}\n\n"
+            resultado += f"**💬 Resposta:** {resposta}\n\n"
+            if email:
+                resultado += f"**📧 Email de contacto:** [{email}](mailto:{email})\n\n"
+            if modelo:
+                resultado += f"**📝 Modelo de email sugerido:**\n\n```\n{modelo}\n```"
+            return resultado
 
-# TXT
-def extrair_texto_txt(file):
-    return file.read().decode("utf-8")
+    # Se não estiver na base manual, procurar nos documentos
+    embedding_pergunta = gerar_embedding(pergunta)
+    blocos_relevantes = procurar_blocos_relevantes(embedding_pergunta, base_docs)
 
-# Websites
-import requests
-from bs4 import BeautifulSoup
+    if blocos_relevantes:
+        resposta = "\n\n".join([f"**Trecho relevante:**\n{bloco['texto']}\n\n_Similaridade: {bloco['similaridade']}_" for bloco in blocos_relevantes])
+        return resposta
 
-def extrair_texto_website(url):
-    resposta = requests.get(url)
-    soup = BeautifulSoup(resposta.content, "html.parser")
-    textos = soup.stripped_strings
-    return "\n".join(textos)
-
-# Função principal para processar documentos
-def processar_documentos(file_or_url):
-    texto = extrair_texto(file_or_url)
-    blocos = [texto[i:i+1000] for i in range(0, len(texto), 1000)]
-
-    for bloco in blocos:
-        if bloco.strip():
-            embedding = gerar_embedding(bloco)
-            guardar_embedding(bloco, embedding)
+    return "❌ Não foi encontrada resposta para a pergunta. Por favor, tente reformular ou contacte os serviços administrativos."
