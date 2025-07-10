@@ -133,7 +133,8 @@ if novo_json:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
-
+st.cache_data.clear()
+st.rerun()
 # Inserção manual (requer código)
 st.markdown("---")
 st.subheader("➕ Inserir manualmente uma nova pergunta")
