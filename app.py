@@ -54,23 +54,27 @@ st.markdown("""
     .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
         color: #ef6c00;
     }
-    .avatar {
-        width: 100px;
-        margin-bottom: 10px;
+    .header-container {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+    .header-container img {
+        width: 80px;
+        margin: 0;
+    }
+    .header-container h1 {
+        color: #ef6c00;
+        font-size: 2em;
+        margin: 0;
     }
     </style>
+    <div class="header-container">
+        <img src="felisberto_avatar.png" alt="Felisberto Avatar">
+        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
+    </div>
 """, unsafe_allow_html=True)
-
-# Cabeçalho com avatar e título
-col_avatar, col_titulo = st.columns([1, 5])
-with col_avatar:
-    st.image("felisberto_avatar.png", width=100)
-with col_titulo:
-    st.markdown("""
-        <h1 style='margin-top: 0px; margin-bottom: 50px;'>
-            Felisberto, Assistente Administrativo ACSUTA
-        </h1>
-    """, unsafe_allow_html=True)
 
 # Colunas para perguntas
 col1, col2 = st.columns(2)
