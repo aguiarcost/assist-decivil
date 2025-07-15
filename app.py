@@ -67,7 +67,7 @@ with col_avatar:
     st.image("felisberto_avatar.png", width=100)
 with col_titulo:
     st.markdown("""
-        <h1 style='margin-top: 0px; margin-bottom: 30px;'>
+        <h1 style='margin-top: 0px; margin-bottom: 50px;'>
             Felisberto, Assistente Administrativo ACSUTA
         </h1>
     """, unsafe_allow_html=True)
