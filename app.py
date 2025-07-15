@@ -61,8 +61,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.image("https://files.oaiusercontent.com/file-0000000032406243bc2b90fb097fd0f4/mnt/data/A_simple,_cartoon-style_digital_illustration_featu.png", width=120, caption="Felisberto")
-st.title("🧡 Felisberto, Assistente Administrativo ACSUTA")
+st.image("felisberto_avatar.png", width=150, caption="👨‍💼 Felisberto — o assistente ACSUTA")
+st.title("Felisberto, Assistente Administrativo ACSUTA")
 
 # Colunas para perguntas
 col1, col2 = st.columns(2)
