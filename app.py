@@ -61,7 +61,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.image("felisberto_avatar.png", width=100, caption="👨‍💼 Felisberto — o assistente ACSUTA")
+st.image("felisberto_avatar.png", width=100)
 st.title("Felisberto, Assistente Administrativo ACSUTA")
 
 # Colunas para perguntas
