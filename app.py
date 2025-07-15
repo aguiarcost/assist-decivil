@@ -9,6 +9,7 @@ from datetime import datetime
 # Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
+CODIGO_AUTORIZACAO = "decivil2024"
 
 # Chave da API (ambiente ou Streamlit Cloud)
 if "OPENAI_API_KEY" in st.secrets:
@@ -45,8 +46,8 @@ def guardar_pergunta_no_historico(pergunta):
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
 # Interface principal
-st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
-st.title("🤖 Felisberto, Assistente Administrativo ACSUTA")
+st.set_page_config(page_title="Assistente DECivil", layout="wide")
+st.title("📘 Assistente Administrativo DECivil")
 
 # Colunas para perguntas
 col1, col2 = st.columns(2)
@@ -127,8 +128,40 @@ if novo_json:
                 todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            st.success("✅ Base de conhecimento atualizada. Reinicie a aplicação para ver as novas perguntas no menu.")
+            st.success("✅ Base de conhecimento atualizada.")
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
+
+# Inserção manual (requer código)
+st.markdown("---")
+st.subheader("➕ Inserir manualmente uma nova pergunta")
+with st.expander("Adicionar nova pergunta/resposta manualmente"):
+    with st.form("form_manual"):
+        codigo = st.text_input("Código de autorização")
+        nova_pergunta = st.text_input("Pergunta")
+        nova_resposta = st.text_area("Resposta")
+        novo_email = st.text_input("Email de contacto (opcional)")
+        novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
+        submeter = st.form_submit_button("Adicionar")
+
+    if submeter:
+        if codigo == CODIGO_AUTORIZACAO:
+            if nova_pergunta and nova_resposta:
+                nova_entrada = {
+                    "pergunta": nova_pergunta,
+                    "resposta": nova_resposta,
+                    "email": novo_email,
+                    "modelo_email": novo_modelo
+                }
+                base_existente = carregar_base_conhecimento()
+                todas = {p["pergunta"]: p for p in base_existente}
+                todas[nova_pergunta] = nova_entrada
+                with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
+                    json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+                st.success("✅ Nova pergunta adicionada à base de conhecimento.")
+            else:
+                st.warning("Por favor preencha a pergunta e a resposta.")
+        else:
+            st.error("Código de autorização inválido.")
