@@ -6,11 +6,11 @@ from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from datetime import datetime
 
-# Caminhos dos ficheiros
+# Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Chave da API
+# Chave da API (ambiente ou local)
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -18,7 +18,7 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Função para carregar base de conhecimento
+# Função auxiliar: carregar base de conhecimento
 @st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
@@ -29,64 +29,55 @@ def carregar_base_conhecimento():
             return []
     return []
 
-# Função para guardar histórico de perguntas
+# Função auxiliar: guardar histórico
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
-    historico = []
     if os.path.exists(CAMINHO_HISTORICO):
         try:
             with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
                 historico = json.load(f)
         except json.JSONDecodeError:
             historico = []
+    else:
+        historico = []
     historico.append(registo)
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Configuração da página
+# Interface
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
-
-# Estilo visual com margem e cor
 st.markdown("""
     <style>
     .stApp {
         background-color: #fff3e0;
     }
-    .titulo-container {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 40px;
-    }
-    .titulo-container img {
-        width: 80px;
-        margin-top: -2px;
-    }
-    .titulo-container h1 {
-        font-size: 28px;
+    h1 {
         color: #ef6c00;
-        margin: 0;
-        padding: 0;
+        font-size: 36px;
+        margin-bottom: 0;
+    }
+    .stSelectbox, .stTextInput {
+        margin-top: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Cabeçalho com imagem e título
-st.markdown("""
-<div class="titulo-container">
-    <img src="felisberto_avatar.png" alt="Avatar">
-    <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
-</div>
-""", unsafe_allow_html=True)
+# Título com imagem ao lado
+col_avatar, col_titulo = st.columns([1, 8])
+with col_avatar:
+    st.image("felisberto_avatar.png", width=80)
+with col_titulo:
+    st.markdown("<h1>Felisberto, Assistente Administrativo ACSUTA</h1>", unsafe_allow_html=True)
 
-# Espaço visual após título
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("## ")  # Espaço visual
 
-# Carregar base de conhecimento
+# Perguntas
+col1, col2 = st.columns(2)
+
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 
-# Construir dicionário de frequência de uso
+# Frequência de uso
 if os.path.exists(CAMINHO_HISTORICO):
     try:
         with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
@@ -98,14 +89,12 @@ if os.path.exists(CAMINHO_HISTORICO):
     except json.JSONDecodeError:
         pass
 
-# Perguntas ordenadas por frequência
+# Ordenar perguntas por frequência
 perguntas_existentes = sorted(
     set(p["pergunta"] for p in base_conhecimento),
     key=lambda x: -frequencia.get(x, 0)
 )
 
-# Input de perguntas
-col1, col2 = st.columns(2)
 with col1:
     pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
 with col2:
@@ -118,7 +107,6 @@ if pergunta_final:
     resposta = gerar_resposta(pergunta_final)
     guardar_pergunta_no_historico(pergunta_final)
 
-# Mostrar resposta
 if resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
