@@ -72,8 +72,8 @@ st.markdown("""
 st.markdown(
     """
     <div class="title-container">
-        <img src="felisberto_avatar.png" alt="Avatar">
-        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
+st.image("felisberto_avatar.png", caption="Teste de imagem", width=100)
+<h1>Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
     """,
     unsafe_allow_html=True
