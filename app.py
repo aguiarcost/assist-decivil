@@ -6,25 +6,19 @@ from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from datetime import datetime
 
-# Caminhos
+# Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# API Key
-openai.api_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+# Chave da API (ambiente ou Streamlit Cloud)
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+elif os.getenv("OPENAI_API_KEY"):
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+else:
+    st.warning("⚠️ A chave da API não está definida.")
 
-# Página e estilo
-st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
-st.markdown("""
-<style>
-    .stApp { background-color: #fff3e0; }
-    .stApp h1, .stApp h2, .stApp h3 { color: #ef6c00; }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🧡 Felisberto, Assistente Administrativo ACSUTA")
-
-# Função: carregar base
+# Função auxiliar: carregar perguntas frequentes
 @st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
@@ -35,57 +29,88 @@ def carregar_base_conhecimento():
             return []
     return []
 
-# Guardar histórico
+# Função auxiliar: guardar histórico
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
-    historico = []
     if os.path.exists(CAMINHO_HISTORICO):
         try:
             with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
                 historico = json.load(f)
         except json.JSONDecodeError:
-            pass
+            historico = []
+    else:
+        historico = []
     historico.append(registo)
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Ordenar por frequência
+# Interface principal
+st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #fff3e0;
+    }
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
+        color: #ef6c00;
+    }
+    .avatar {
+        width: 100px;
+        margin-bottom: 10px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.image("https://files.oaiusercontent.com/file-0000000032406243bc2b90fb097fd0f4/mnt/data/A_simple,_cartoon-style_digital_illustration_featu.png", width=120, caption="Felisberto")
+st.title("🧡 Felisberto, Assistente Administrativo ACSUTA")
+
+# Colunas para perguntas
+col1, col2 = st.columns(2)
+
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
+
+# Construir dicionário de frequência de uso
 if os.path.exists(CAMINHO_HISTORICO):
     try:
         with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
-            for item in json.load(f):
+            historico = json.load(f)
+            for item in historico:
                 p = item.get("pergunta")
                 if p:
                     frequencia[p] = frequencia.get(p, 0) + 1
-    except:
+    except json.JSONDecodeError:
         pass
-perguntas_frequentes = sorted({p["pergunta"] for p in base_conhecimento}, key=lambda x: -frequencia.get(x, 0))
 
-# Interface de pergunta
-col1, col2 = st.columns(2)
+# Ordenar perguntas por frequência de uso
+perguntas_existentes = sorted(
+    set(p["pergunta"] for p in base_conhecimento),
+    key=lambda x: -frequencia.get(x, 0)
+)
+
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_frequentes)
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
 
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
-resposta = ""
 
+resposta = ""
 if pergunta_final:
     resposta = gerar_resposta(pergunta_final)
     guardar_pergunta_no_historico(pergunta_final)
 
+# Mostrar a resposta logo após a pergunta
 if resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta)
 
-# Secção de upload
+# Secção de upload de documentos
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
+
 with col3:
     ficheiro = st.file_uploader("Upload de ficheiro (.pdf, .docx, .txt)", type=["pdf", "docx", "txt"])
     if ficheiro:
@@ -94,6 +119,7 @@ with col3:
             st.success("✅ Documento processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
+
 with col4:
     url = st.text_input("Ou insira um link para processar conteúdo:")
     if st.button("📥 Processar URL") and url:
@@ -103,7 +129,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Atualizar base de conhecimento
+# Upload de novas perguntas/respostas
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -117,21 +143,22 @@ if novo_json:
                 todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            st.success("✅ Base atualizada. Reinicie para ver as novas perguntas.")
+            st.success("✅ Base de conhecimento atualizada. Reinicie a aplicação para ver as novas perguntas no menu.")
         else:
-            st.error("⚠️ O ficheiro deve conter uma lista de perguntas.")
+            st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
-        st.error(f"Erro: {e}")
+        st.error(f"Erro ao ler ficheiro JSON: {e}")
 
+# Adicionar nova pergunta via popup
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
-    nova_resposta = st.text_area("Resposta")
+    nova_resposta = st.text_area("Resposta à pergunta")
     novo_email = st.text_input("Email de contacto (opcional)")
     novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
     if st.button("Guardar pergunta"):
         if nova_pergunta and nova_resposta:
-            base = carregar_base_conhecimento()
-            todas = {p["pergunta"]: p for p in base}
+            base_existente = carregar_base_conhecimento()
+            todas = {p["pergunta"]: p for p in base_existente}
             todas[nova_pergunta] = {
                 "pergunta": nova_pergunta,
                 "resposta": nova_resposta,
@@ -140,6 +167,7 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
             }
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            st.success("✅ Pergunta adicionada. Reinicie para ver no menu.")
+            st.success("✅ Pergunta adicionada com sucesso. Reinicie a aplicação para ver no menu.")
         else:
-            st.warning("Preencha pelo menos a pergunta e a resposta.")
+            st.warning("Por favor, preencha pelo menos a pergunta e a resposta.")
+
