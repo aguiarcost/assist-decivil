@@ -65,7 +65,11 @@ col_avatar, col_titulo = st.columns([1, 5])
 with col_avatar:
     st.image("felisberto_avatar.png", width=100)
 with col_titulo:
-    st.markdown("<h1 style='margin-top: 20px;'>Felisberto, Assistente Administrativo ACSUTA</h1>", unsafe_allow_html=True)
+    st.markdown("""
+        <h1 style='margin-top: 20px; margin-bottom: 30px;'>
+            Felisberto, Assistente Administrativo ACSUTA
+        </h1>
+    """, unsafe_allow_html=True)
 
 # Colunas para perguntas
 col1, col2 = st.columns(2)
