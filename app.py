@@ -10,7 +10,7 @@ from datetime import datetime
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Chave da API (ambiente ou Streamlit Cloud)
+# Chave da API (ambiente ou local)
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -18,7 +18,7 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Função auxiliar: carregar perguntas frequentes
+# Função auxiliar: carregar base de conhecimento
 @st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
@@ -44,45 +44,50 @@ def guardar_pergunta_no_historico(pergunta):
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Interface principal
+# Interface
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 st.markdown("""
     <style>
     .stApp {
         background-color: #fff3e0;
     }
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
+    h1 {
         color: #ef6c00;
-    }
-    .header-container {
         display: flex;
         align-items: center;
-        gap: 16px;
-        margin-bottom: 30px;
+        gap: 20px;
+        margin-top: 0;
     }
-    .header-container img {
+    .avatar-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .avatar-container img {
         width: 80px;
-        margin: 0;
-    }
-    .header-container h1 {
-        color: #ef6c00;
-        font-size: 2em;
-        margin: 0;
+        margin-top: -5px;
     }
     </style>
-    <div class="header-container">
-        <img src="felisberto_avatar.png" alt="Felisberto Avatar">
-        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
-    </div>
 """, unsafe_allow_html=True)
 
-# Colunas para perguntas
+# Título com imagem ao lado
+st.markdown(
+    """
+    <div class="avatar-container">
+        <img src="felisberto_avatar.png" alt="Avatar">
+        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# Perguntas
 col1, col2 = st.columns(2)
 
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 
-# Construir dicionário de frequência de uso
+# Frequência de uso
 if os.path.exists(CAMINHO_HISTORICO):
     try:
         with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
@@ -94,7 +99,7 @@ if os.path.exists(CAMINHO_HISTORICO):
     except json.JSONDecodeError:
         pass
 
-# Ordenar perguntas por frequência de uso
+# Ordenar perguntas por frequência
 perguntas_existentes = sorted(
     set(p["pergunta"] for p in base_conhecimento),
     key=lambda x: -frequencia.get(x, 0)
@@ -112,13 +117,12 @@ if pergunta_final:
     resposta = gerar_resposta(pergunta_final)
     guardar_pergunta_no_historico(pergunta_final)
 
-# Mostrar a resposta logo após a pergunta
 if resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta)
 
-# Secção de upload de documentos
+# Upload de documentos
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
@@ -141,7 +145,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Upload de novas perguntas/respostas
+# Upload JSON com novas perguntas
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -155,13 +159,13 @@ if novo_json:
                 todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            st.success("✅ Base de conhecimento atualizada. Reinicie a aplicação para ver as novas perguntas no menu.")
+            st.success("✅ Base de conhecimento atualizada. Reinicie a aplicação para ver as novas perguntas.")
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Adicionar nova pergunta via popup
+# Adicionar pergunta manual
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
@@ -179,7 +183,7 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
             }
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            st.success("✅ Pergunta adicionada com sucesso. Reinicie a aplicação para ver no menu.")
+            st.success("✅ Pergunta adicionada com sucesso.")
         else:
-            st.warning("Por favor, preencha pelo menos a pergunta e a resposta.")
+            st.warning("⚠️ Preencha a pergunta e a resposta.")
 
