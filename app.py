@@ -62,7 +62,7 @@ col_avatar, col_titulo = st.columns([1, 8])
 with col_avatar:
     st.image("felisberto_avatar.png", width=80)
 with col_titulo:
-    st.markdown("## 🧡 Felisberto, Assistente Administrativo ACSUTA")
+    st.markdown("##Felisberto, Assistente Administrativo ACSUTA")
 
 # Perguntas
 col1, col2 = st.columns(2)
