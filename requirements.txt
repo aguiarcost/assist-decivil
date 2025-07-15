@@ -1,9 +1,1 @@
-streamlit
-openai>=1.0
-scikit-learn
-numpy
-PyMuPDF
-python-docx
-beautifulsoup4
-requests
-
+<conteúdo atualizado do requirements.txt>
