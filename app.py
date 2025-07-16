@@ -6,9 +6,11 @@ from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from datetime import datetime
 
+# Caminhos
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
+# Chave da API
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -16,6 +18,7 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
+# Carregar base
 @st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
@@ -26,6 +29,7 @@ def carregar_base_conhecimento():
             return []
     return []
 
+# Guardar histórico
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
     if os.path.exists(CAMINHO_HISTORICO):
@@ -40,7 +44,7 @@ def guardar_pergunta_no_historico(pergunta):
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Configuração da página
+# Estilo e layout
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 st.markdown("""
     <style>
@@ -50,20 +54,18 @@ st.markdown("""
     .title-container {
         display: flex;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 12px;
-        margin-top: 10px;
+        gap: 15px;
+        margin-bottom: 30px;
+        margin-top: -10px;
     }
     .title-container img {
-        width: 70px;
-        margin: 0;
-        padding: 0;
+        width: 80px;
+        margin-top: -5px;
     }
     .title-container h1 {
-        font-size: 30px;
         color: #ef6c00;
+        font-size: 32px;
         margin: 0;
-        padding: 0;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -72,15 +74,14 @@ st.markdown("""
 st.markdown(
     """
     <div class="title-container">
-st.image("felisberto_avatar.png", caption="Teste de imagem", width=100)
-<h1>Felisberto, Assistente Administrativo ACSUTA</h1>
+        <img src="felisberto_avatar.png" alt="Felisberto">
+        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# Carregamento de perguntas
-col1, col2 = st.columns(2)
+# Perguntas
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 
@@ -100,6 +101,9 @@ perguntas_existentes = sorted(
     key=lambda x: -frequencia.get(x, 0)
 )
 
+st.markdown("### 🙋‍♂️ Faça a sua pergunta")
+
+col1, col2 = st.columns(2)
 with col1:
     pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
 with col2:
@@ -140,7 +144,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Atualizar base
+# Upload JSON com novas perguntas
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
