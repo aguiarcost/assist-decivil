@@ -6,11 +6,9 @@ from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from datetime import datetime
 
-# Caminhos dos ficheiros
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Chave da API
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -18,7 +16,6 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Carregar base de conhecimento
 @st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
@@ -29,7 +26,6 @@ def carregar_base_conhecimento():
             return []
     return []
 
-# Guardar histórico
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
     if os.path.exists(CAMINHO_HISTORICO):
@@ -44,34 +40,29 @@ def guardar_pergunta_no_historico(pergunta):
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Configuração de página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 st.markdown("""
     <style>
-    .stApp { background-color: #fff3e0; }
-    h1 { color: #ef6c00; display: flex; align-items: center; gap: 20px; margin-top: 0; }
-    .avatar-container { display: flex; align-items: center; gap: 15px; }
-    .avatar-container img { width: 80px; margin-top: -5px; }
+    .stApp {
+        background-color: #fff3e0;
+    }
+    h1 {
+        color: #ef6c00;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# Título com avatar
-st.markdown(
-    """
-    <div class="avatar-container">
-        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Avatar">
-        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# Cabeçalho com imagem
+col_logo, col_title = st.columns([1, 8])
+with col_logo:
+    st.image("felisberto_avatar.png", width=90)
+with col_title:
+    st.title("Felisberto, Assistente Administrativo ACSUTA")
 
 # Perguntas
-col1, col2 = st.columns(2)
 base_conhecimento = carregar_base_conhecimento()
-
-# Frequência de uso
 frequencia = {}
+
 if os.path.exists(CAMINHO_HISTORICO):
     try:
         with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
@@ -88,28 +79,29 @@ perguntas_existentes = sorted(
     key=lambda x: -frequencia.get(x, 0)
 )
 
-# Input com prioridade
+col1, col2 = st.columns(2)
 with col1:
-    st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="pergunta_dropdown")
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
 with col2:
-    st.text_input("Ou escreva a sua pergunta:", key="pergunta_manual")
+    pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
 
-pergunta_final = ""
-if st.session_state.pergunta_manual.strip():
-    pergunta_final = st.session_state.pergunta_manual.strip()
-elif st.session_state.pergunta_dropdown:
-    pergunta_final = st.session_state.pergunta_dropdown
+if "ultima_pergunta" not in st.session_state:
+    st.session_state.ultima_pergunta = ""
+if "resposta" not in st.session_state:
+    st.session_state.resposta = ""
 
-# Obter resposta
-resposta = ""
-if pergunta_final:
-    resposta = gerar_resposta(pergunta_final)
-    guardar_pergunta_no_historico(pergunta_final)
+nova_pergunta = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
-if resposta:
+if nova_pergunta and nova_pergunta != st.session_state.ultima_pergunta:
+    resposta = gerar_resposta(nova_pergunta)
+    st.session_state.resposta = resposta
+    st.session_state.ultima_pergunta = nova_pergunta
+    guardar_pergunta_no_historico(nova_pergunta)
+
+if st.session_state.resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
-    st.markdown(resposta)
+    st.markdown(st.session_state.resposta)
 
 # Upload de documentos
 st.markdown("---")
@@ -134,7 +126,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Atualizar base com JSON
+# Atualização da base de conhecimento
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -148,13 +140,13 @@ if novo_json:
                 todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            st.success("✅ Base de conhecimento atualizada. Reinicie para ver as novas perguntas.")
+            st.success("✅ Base atualizada. Reinicie para ver novas perguntas.")
         else:
-            st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
+            st.error("⚠️ O ficheiro JSON deve conter uma lista.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Adicionar pergunta manual
+# Adição manual
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
