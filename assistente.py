@@ -1,7 +1,7 @@
 import json
 import os
-from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 
@@ -25,15 +25,19 @@ def gerar_resposta(pergunta):
 
     cosine_similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])
     melhor_indice = cosine_similarities.argmax()
+    similaridade = cosine_similarities[0, melhor_indice]
 
-    if cosine_similarities[0, melhor_indice] < 0.4:
+    if similaridade < 0.4:
         return "❌ Pergunta não encontrada na base de conhecimento."
 
     item = base[melhor_indice]
-    resposta = item.get("resposta", "")
+    resposta = item.get("resposta", "").strip()
     modelo = item.get("modelo", "").strip()
+
+    if not resposta:
+        return "⚠️ Esta entrada não contém uma resposta válida."
 
     if modelo:
         resposta += f"\n\n<details><summary>📧 Modelo de email sugerido</summary>\n\n```\n{modelo}\n```\n</details>"
 
-    return resposta or "⚠️ Não foi possível gerar uma resposta."
+    return resposta
