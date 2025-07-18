@@ -9,7 +9,6 @@ from datetime import datetime
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Chave API
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -41,27 +40,47 @@ def guardar_pergunta_no_historico(pergunta):
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Layout e estilo
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 st.markdown("""
     <style>
-    .stApp { background-color: #fff3e0; }
-    h1 { color: #ef6c00; display: flex; align-items: center; gap: 10px; margin-top: 5px; }
-    .avatar-container { display: flex; align-items: center; gap: 10px; }
-    .avatar-container img { width: 60px; }
+    .stApp {
+        background-color: #fff3e0;
+    }
+    h1 {
+        color: #ef6c00;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+    .avatar-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 1rem;
+    }
+    .avatar-container img {
+        width: 80px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# Cabeçalho com avatar
-st.markdown("""
+st.markdown(
+    """
     <div class="avatar-container">
         <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Avatar">
         <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
-# Interface de pergunta
+if "pergunta_anterior" not in st.session_state:
+    st.session_state.pergunta_anterior = ""
+
 col1, col2 = st.columns(2)
+
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 
@@ -82,13 +101,15 @@ perguntas_existentes = sorted(
 )
 
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="pergunta_dropdown")
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
 
-pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
+pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else st.session_state.pergunta_dropdown
+
 resposta = ""
-if pergunta_final:
+if pergunta_final and pergunta_final != st.session_state.pergunta_anterior:
+    st.session_state.pergunta_anterior = pergunta_final
     resposta = gerar_resposta(pergunta_final)
     guardar_pergunta_no_historico(pergunta_final)
 
@@ -97,7 +118,6 @@ if resposta:
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta, unsafe_allow_html=True)
 
-# Upload de documentos
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
@@ -120,7 +140,6 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Adicionar novas perguntas
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -134,13 +153,12 @@ if novo_json:
                 todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            st.success("✅ Base de conhecimento atualizada.")
+            st.success("✅ Base de conhecimento atualizada. Reinicie a aplicação para ver as novas perguntas.")
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Adição manual
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
