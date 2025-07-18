@@ -47,5 +47,3 @@ def gerar_resposta(pergunta_usuario):
         resposta_final += f"\n\n📮 **Contacto sugerido:** `{contacto}`"
 
     return resposta_final
-
-
