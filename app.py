@@ -6,10 +6,11 @@ from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from datetime import datetime
 
+# Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Configurar chave API
+# Chave da API
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -17,7 +18,6 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Carregar base de conhecimento
 @st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
@@ -28,7 +28,6 @@ def carregar_base_conhecimento():
             return []
     return []
 
-# Guardar histórico
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
     if os.path.exists(CAMINHO_HISTORICO):
@@ -43,7 +42,6 @@ def guardar_pergunta_no_historico(pergunta):
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 st.markdown("""
     <style>
@@ -55,41 +53,41 @@ st.markdown("""
         display: flex;
         align-items: center;
         gap: 20px;
-        margin-bottom: 0;
+        margin-top: 0;
+        margin-bottom: 10px;
     }
     .avatar-container {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 15px;
     }
     .avatar-container img {
-        width: 65px;
-        margin-top: -5px;
-    }
-    .resposta {
-        background-color: #fff;
-        border-left: 5px solid #ef6c00;
-        padding: 15px;
-        margin-top: 10px;
+        width: 80px;
+        margin-top: 0;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Título com avatar
-st.markdown("""
+# Cabeçalho com imagem
+st.markdown(
+    """
     <div class="avatar-container">
-        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto">
+        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Avatar">
         <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
-# Pergunta
-col1, col2 = st.columns(2)
+# Inicializar estado
+if "pergunta_final" not in st.session_state:
+    st.session_state.pergunta_final = ""
+if "resposta" not in st.session_state:
+    st.session_state.resposta = ""
 
+# Carregar base e histórico
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
-
-# Contar frequência de uso
 if os.path.exists(CAMINHO_HISTORICO):
     try:
         with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
@@ -101,34 +99,53 @@ if os.path.exists(CAMINHO_HISTORICO):
     except json.JSONDecodeError:
         pass
 
-# Perguntas ordenadas por frequência
 perguntas_existentes = sorted(
     set(p["pergunta"] for p in base_conhecimento),
     key=lambda x: -frequencia.get(x, 0)
 )
 
+# Perguntas
+col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
+    pergunta_dropdown = st.selectbox(
+        "Escolha uma pergunta frequente:",
+        [""] + perguntas_existentes,
+        key="pergunta_dropdown"
+    )
 with col2:
-    pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
+    pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="pergunta_manual")
 
-pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
+if pergunta_manual.strip():
+    st.session_state.pergunta_final = pergunta_manual.strip()
+elif pergunta_dropdown:
+    st.session_state.pergunta_final = pergunta_dropdown
 
-# Mostrar resposta
-if pergunta_final:
-    resposta = gerar_resposta(pergunta_final)
-    guardar_pergunta_no_historico(pergunta_final)
+if st.session_state.pergunta_final:
+    st.session_state.resposta = gerar_resposta(st.session_state.pergunta_final)
+    guardar_pergunta_no_historico(st.session_state.pergunta_final)
 
-    if resposta:
-        st.markdown("---")
-        st.subheader("💡 Resposta do assistente")
-        st.markdown(f'<div class="resposta">{resposta}</div>', unsafe_allow_html=True)
+if st.session_state.resposta:
+    st.markdown("---")
+    st.subheader("💡 Resposta do assistente")
+
+    partes = st.session_state.resposta.split("📧 **Email de contacto:**")
+    resposta_principal = partes[0].strip()
+    st.markdown(f"**🟠 Resposta:**\n\n{resposta_principal}")
+
+    if len(partes) > 1:
+        resto = partes[1].split("📄 **Modelo de email sugerido:**")
+        email_contacto = resto[0].strip()
+        st.markdown(f"**📧 Email de contacto:** {email_contacto}")
+
+        if len(resto) > 1:
+            modelo_email = resto[1].strip()
+            st.markdown("**📄 Modelo de email sugerido:**")
+            st.code(modelo_email, language="text")
 
 # Upload de documentos
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
-
 with col3:
     ficheiro = st.file_uploader("Upload de ficheiro (.pdf, .docx, .txt)", type=["pdf", "docx", "txt"])
     if ficheiro:
@@ -137,7 +154,6 @@ with col3:
             st.success("✅ Documento processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
-
 with col4:
     url = st.text_input("Ou insira um link para processar conteúdo:")
     if st.button("📥 Processar URL") and url:
@@ -147,7 +163,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Atualizar base com JSON
+# Upload JSON
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -167,7 +183,7 @@ if novo_json:
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Adição manual
+# Adicionar manualmente
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
