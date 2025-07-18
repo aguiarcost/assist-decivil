@@ -1,42 +1,51 @@
-import json
-import os
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
+import json
+import os
 
-CAMINHO_BASE = "base_conhecimento.json"
+CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 
-def carregar_base():
-    if os.path.exists(CAMINHO_BASE):
-        with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
-            try:
+def carregar_base_conhecimento():
+    if os.path.exists(CAMINHO_CONHECIMENTO):
+        try:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
                 return json.load(f)
-            except json.JSONDecodeError:
-                return []
+        except json.JSONDecodeError:
+            return []
     return []
 
-def gerar_resposta(pergunta_utilizador):
-    base = carregar_base()
+def gerar_resposta(pergunta_usuario):
+    base = carregar_base_conhecimento()
+    if not base:
+        return "⚠️ Base de conhecimento não encontrada ou vazia."
+
     perguntas = [item["pergunta"] for item in base]
-    
-    if not perguntas:
-        return "❌ Base de conhecimento vazia."
+    vectorizer = TfidfVectorizer().fit_transform(perguntas + [pergunta_usuario])
+    vetor_pergunta = vectorizer[-1]
+    vetores_base = vectorizer[:-1]
 
-    # Vetorização
-    vect = TfidfVectorizer().fit_transform(perguntas + [pergunta_utilizador])
-    similaridades = cosine_similarity(vect[-1], vect[:-1]).flatten()
-
+    similaridades = cosine_similarity(vetor_pergunta, vetores_base).flatten()
     idx_mais_proximo = similaridades.argmax()
-    melhor_match = base[idx_mais_proximo]
 
-    resposta = melhor_match.get("resposta", "❌ Sem resposta definida.")
-    email = melhor_match.get("email", "")
-    modelo = melhor_match.get("modelo_email", "")
+    if similaridades[idx_mais_proximo] < 0.3:
+        return "🤷‍♂️ Desculpe, não encontrei uma resposta adequada."
 
-    resposta_final = f"{resposta}"
+    entrada = base[idx_mais_proximo]
+    resposta = entrada.get("resposta", "").strip()
+    modelo_email = entrada.get("modelo", "").strip()
+    contacto = entrada.get("email", "").strip()
 
-    if email:
-        resposta_final += f"\n\n📧 **Email de contacto:** {email}"
-    if modelo:
-        resposta_final += f"\n\n📄 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+    resposta_final = f"### 🧾 Resposta:\n\n{resposta}"
+
+    if modelo_email:
+        resposta_final += f"""\n\n---\n### 📧 Modelo de email sugerido:
+```plaintext
+{modelo_email}
+```"""
+
+    if contacto:
+        resposta_final += f"\n\n📮 **Contacto sugerido:** `{contacto}`"
 
     return resposta_final
+
+
