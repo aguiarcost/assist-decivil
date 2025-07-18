@@ -1,7 +1,7 @@
+streamlit
+openai
 scikit-learn
-streamlit>=1.27.0
-openai>=1.0.0
 python-docx
-PyMuPDF
-requests
+PyPDF2
 beautifulsoup4
+requests
