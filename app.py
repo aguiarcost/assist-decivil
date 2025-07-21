@@ -43,3 +43,11 @@ if opcao:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta)
+
+# Rodapé
+st.markdown("""
+<hr style='margin-top: 50px; margin-bottom: 10px;'>
+<div style='text-align: center; color: gray; font-size: 0.9em;'>
+    © 2025 AAC
+</div>
+""", unsafe_allow_html=True)
