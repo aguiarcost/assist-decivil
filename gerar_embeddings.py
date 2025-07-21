@@ -1,48 +1,33 @@
-import openai
 import json
-import os
-import streamlit as st
+from openai import OpenAI
 
-CAMINHO_BASE_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_BASE_VECTOR = "base_vectorizada.json"
+CAMINHO_BASE = "base_conhecimento.json"
+CAMINHO_VETORES = "base_vectorizada.json"
 
-# Autenticar com a API
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+client = OpenAI(api_key="INSERE_AQUI_A_SUA_API_KEY_TEMPORARIAMENTE")
 
-# Função para gerar embeddings com API nova
-def gerar_embedding(texto):
+def gerar_embedding(pergunta):
     try:
-        response = openai.embeddings.create(
-            input=texto,
-            model="text-embedding-3-small"
+        response = client.embeddings.create(
+            model="text-embedding-ada-002",
+            input=pergunta
         )
         return response.data[0].embedding
     except Exception as e:
-        print(f"Erro ao gerar embedding para: {texto}\n{e}")
+        print(f"❌ Erro ao gerar embedding para: {pergunta}\n{e}")
         return None
 
-# Carregar base de conhecimento
-with open(CAMINHO_BASE_CONHECIMENTO, "r", encoding="utf-8") as f:
-    base = json.load(f)
+with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
+    conhecimento = json.load(f)
 
-base_vector = []
-
-for item in base:
-    pergunta = item["pergunta"]
-    resposta = item["resposta"]
-    modelo_email = item.get("modelo_email", "")
-
+dados = []
+for entrada in conhecimento:
+    pergunta = entrada["pergunta"]
     embedding = gerar_embedding(pergunta)
     if embedding:
-        base_vector.append({
-            "pergunta": pergunta,
-            "resposta": resposta,
-            "modelo_email": modelo_email,
-            "embedding": embedding
-        })
+        dados.append({"pergunta": pergunta, "embedding": embedding})
 
-# Guardar embeddings
-with open(CAMINHO_BASE_VECTOR, "w", encoding="utf-8") as f:
-    json.dump(base_vector, f, ensure_ascii=False, indent=2)
+with open(CAMINHO_VETORES, "w", encoding="utf-8") as f:
+    json.dump(dados, f, ensure_ascii=False, indent=2)
 
-print("✅ Embeddings gerados e guardados em base_vectorizada.json")
+print("✅ Embeddings gerados e guardados com sucesso.")
