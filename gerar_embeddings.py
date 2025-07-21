@@ -1,47 +1,58 @@
-
 import openai
-import pickle
-import os
 import json
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import normalize
-import numpy as np
+import os
+import time
+from dotenv import load_dotenv
 
-CAMINHO_EMBEDDINGS = "embeddings.pkl"
-CAMINHO_CONHECIMENTO = "base_conhecimento.json"
+# Carregar a chave da API a partir do secrets.toml via variável de ambiente
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def carregar_base_conhecimento():
-    if os.path.exists(CAMINHO_CONHECIMENTO):
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+# Caminhos
+CAMINHO_BASE = "base_conhecimento.json"
+CAMINHO_VETORES = "base_vectorizada.json"
 
-def gerar_embedding_openai(texto):
-    try:
-        response = openai.embeddings.create(
-            model="text-embedding-ada-002",
-            input=texto
-        )
-        return response.data[0].embedding
-    except Exception as e:
-        print(f"Erro ao gerar embedding: {e}")
-        return None
+# Modelo de embedding recomendado
+EMBEDDING_MODEL = "text-embedding-3-small"
 
-def guardar_na_base_com_embbeding(texto, origem="Documento carregado"):
-    base_conhecimento = carregar_base_conhecimento()
-    nova_entrada = {
-        "pergunta": origem,
-        "resposta": texto.strip(),
-        "email": "",
-        "modelo": ""
-    }
-    base_conhecimento.append(nova_entrada)
+def gerar_embedding(texto, tentativas=3):
+    for tentativa in range(tentativas):
+        try:
+            response = openai.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=texto
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            print(f"Erro ao gerar embedding para: {texto}\n\n{e}")
+            time.sleep(2)
+    return None
 
-    with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-        json.dump(base_conhecimento, f, ensure_ascii=False, indent=2)
+def main():
+    if not os.path.exists(CAMINHO_BASE):
+        print(f"⚠️ Ficheiro {CAMINHO_BASE} não encontrado.")
+        return
 
-    # Gerar e guardar embedding
-    embedding = gerar_embedding_openai(origem)
-    if embedding:
-        with open(CAMINHO_EMBEDDINGS, "ab") as f:
-            pickle.dump((origem, embedding), f)
+    with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
+        base_conhecimento = json.load(f)
+
+    base_vectorizada = []
+
+    for entrada in base_conhecimento:
+        pergunta = entrada.get("pergunta", "")
+        if pergunta:
+            embedding = gerar_embedding(pergunta)
+            if embedding:
+                base_vectorizada.append({
+                    "pergunta": pergunta,
+                    "resposta": entrada.get("resposta", ""),
+                    "modelo_email": entrada.get("modelo_email", ""),
+                    "embedding": embedding
+                })
+
+    with open(CAMINHO_VETORES, "w", encoding="utf-8") as f:
+        json.dump(base_vectorizada, f, ensure_ascii=False, indent=2)
+
+    print("✅ Embeddings gerados e guardados em base_vectorizada.json")
+
+if __name__ == "__main__":
+    main()
