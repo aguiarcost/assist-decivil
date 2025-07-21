@@ -1,17 +1,14 @@
 import json
 import os
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 
 def carregar_base():
     if os.path.exists(CAMINHO_CONHECIMENTO):
-        try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return []
+        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+            return json.load(f)
     return []
 
 def gerar_resposta(pergunta):
@@ -19,25 +16,24 @@ def gerar_resposta(pergunta):
     if not base:
         return "⚠️ Base de conhecimento vazia."
 
-    perguntas = [p["pergunta"] for p in base]
+    perguntas = [item["pergunta"] for item in base]
+    respostas = [item["resposta"] for item in base]
+
     vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(perguntas + [pergunta])
+    tfidf_matrix = vectorizer.fit_transform(perguntas)
+    pergunta_vec = vectorizer.transform([pergunta])
+    similaridades = cosine_similarity(pergunta_vec, tfidf_matrix).flatten()
 
-    cosine_similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])
-    melhor_indice = cosine_similarities.argmax()
-    similaridade = cosine_similarities[0, melhor_indice]
+    idx_mais_similar = similaridades.argmax()
+    if similaridades[idx_mais_similar] < 0.3:
+        return "🤷‍♂️ Desculpe, não encontrei uma resposta adequada."
 
-    if similaridade < 0.4:
-        return "❌ Pergunta não encontrada na base de conhecimento."
+    entrada = base[idx_mais_similar]
+    resposta = f"{entrada['resposta']}"
 
-    item = base[melhor_indice]
-    resposta = item.get("resposta", "").strip()
-    modelo = item.get("modelo", "").strip()
-
-    if not resposta:
-        return "⚠️ Esta entrada não contém uma resposta válida."
-
-    if modelo:
-        resposta += f"\n\n<details><summary>📧 Modelo de email sugerido</summary>\n\n```\n{modelo}\n```\n</details>"
+    if entrada.get("email"):
+        resposta += f"\n\n✉️ **Email de contacto sugerido:** `{entrada['email']}`"
+    if entrada.get("modelo"):
+        resposta += f"\n\n📄 **Modelo de email sugerido:**\n\n```\n{entrada['modelo']}\n```"
 
     return resposta
