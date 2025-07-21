@@ -1,46 +1,35 @@
-
+import openai
 import json
 import os
-import numpy as np
-from openai import OpenAI
-from tqdm import tqdm
 
-CAMINHO_BASE = "base_conhecimento.json"
-CAMINHO_EMBEDDINGS = "embeddings.npy"
-CAMINHO_INDICE = "indice.json"
+# API key
+if "OPENAI_API_KEY" in os.environ:
+    openai.api_key = os.environ["OPENAI_API_KEY"]
 
-client = OpenAI()
+CAMINHO_CONHECIMENTO = "base_conhecimento.json"
+CAMINHO_EMBEDDINGS = "base_embeddings.json"
 
-def gerar_embedding(texto):
-    try:
-        response = client.embeddings.create(
-            input=texto,
-            model="text-embedding-3-small"
-        )
-        return response.data[0].embedding
-    except Exception as e:
-        print(f"Erro ao gerar embedding para: {texto}\n{e}")
-        return None
+def gerar_embeddings():
+    with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+        base = json.load(f)
 
-# Carregar base de conhecimento
-with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
-    base = json.load(f)
+    dados_emb = []
 
-embeddings = []
-indice = []
+    for item in base:
+        pergunta = item["pergunta"]
+        try:
+            response = openai.embeddings.create(
+                model="text-embedding-ada-002",
+                input=pergunta
+            )
+            embedding = response.data[0].embedding
+            dados_emb.append({"pergunta": pergunta, "embedding": embedding})
+            print(f"✅ Embedding gerado: {pergunta}")
+        except Exception as e:
+            print(f"Erro ao gerar embedding para: {pergunta}\n{e}")
 
-# Gerar embeddings
-for item in tqdm(base):
-    pergunta = item.get("pergunta")
-    if pergunta:
-        emb = gerar_embedding(pergunta)
-        if emb:
-            embeddings.append(emb)
-            indice.append(pergunta)
+    with open(CAMINHO_EMBEDDINGS, "w", encoding="utf-8") as f:
+        json.dump(dados_emb, f)
 
-# Guardar resultados
-np.save(CAMINHO_EMBEDDINGS, np.array(embeddings))
-with open(CAMINHO_INDICE, "w", encoding="utf-8") as f:
-    json.dump(indice, f, ensure_ascii=False, indent=2)
-
-print("Embeddings gerados com sucesso.")
+if __name__ == "__main__":
+    gerar_embeddings()
