@@ -9,6 +9,7 @@ from datetime import datetime
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
+# API KEY
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -28,19 +29,19 @@ def carregar_base_conhecimento():
 
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
+    historico = []
     if os.path.exists(CAMINHO_HISTORICO):
         try:
             with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
                 historico = json.load(f)
         except json.JSONDecodeError:
-            historico = []
-    else:
-        historico = []
+            pass
     historico.append(registo)
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
+
 st.markdown("""
     <style>
     .stApp {
@@ -50,45 +51,33 @@ st.markdown("""
         color: #ef6c00;
         display: flex;
         align-items: center;
-        gap: 20px;
-        margin-top: 0;
-        margin-bottom: 0;
-    }
-    .avatar-container {
-        display: flex;
-        align-items: center;
         gap: 15px;
-        margin-bottom: 1rem;
     }
-    .avatar-container img {
-        width: 80px;
+    .title-container img {
+        width: 70px;
+        margin-top: -5px;
     }
     </style>
 """, unsafe_allow_html=True)
 
+# Avatar com título
 st.markdown(
     """
-    <div class="avatar-container">
-        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Avatar">
-        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
+    <div class="title-container">
+        <h1><img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png">Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-if "pergunta_anterior" not in st.session_state:
-    st.session_state.pergunta_anterior = ""
-
-col1, col2 = st.columns(2)
-
+# PERGUNTAS
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 
 if os.path.exists(CAMINHO_HISTORICO):
     try:
         with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
-            historico = json.load(f)
-            for item in historico:
+            for item in json.load(f):
                 p = item.get("pergunta")
                 if p:
                     frequencia[p] = frequencia.get(p, 0) + 1
@@ -100,24 +89,25 @@ perguntas_existentes = sorted(
     key=lambda x: -frequencia.get(x, 0)
 )
 
+col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="pergunta_dropdown")
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
 
-pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else st.session_state.pergunta_dropdown
+pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
 resposta = ""
-if pergunta_final and pergunta_final != st.session_state.pergunta_anterior:
-    st.session_state.pergunta_anterior = pergunta_final
+if pergunta_final:
     resposta = gerar_resposta(pergunta_final)
     guardar_pergunta_no_historico(pergunta_final)
 
 if resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
-    st.markdown(resposta, unsafe_allow_html=True)
+    st.markdown(resposta)
 
+# UPLOAD DE DOCUMENTOS
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
@@ -140,6 +130,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
+# ATUALIZAÇÃO BASE
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -153,12 +144,13 @@ if novo_json:
                 todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            st.success("✅ Base de conhecimento atualizada. Reinicie a aplicação para ver as novas perguntas.")
+            st.success("✅ Base atualizada. Reinicie para ver novas perguntas.")
         else:
-            st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
+            st.error("⚠️ O ficheiro deve conter uma lista de perguntas.")
     except Exception as e:
-        st.error(f"Erro ao ler ficheiro JSON: {e}")
+        st.error(f"Erro ao ler JSON: {e}")
 
+# ADICIONAR MANUALMENTE
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
