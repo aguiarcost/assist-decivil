@@ -5,39 +5,38 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 
-def carregar_base_conhecimento():
+# Carregar base de conhecimento
+def carregar_base():
     if os.path.exists(CAMINHO_CONHECIMENTO):
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-            try:
+        try:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
                 return json.load(f)
-            except json.JSONDecodeError:
-                return []
+        except json.JSONDecodeError:
+            return []
     return []
 
-def gerar_resposta(pergunta_usuario):
-    base_conhecimento = carregar_base_conhecimento()
-    if not base_conhecimento:
-        return "⚠️ A base de conhecimento está vazia."
+# Gerar resposta com similaridade
+def gerar_resposta(pergunta):
+    base = carregar_base()
+    if not base:
+        return "⚠️ A base de conhecimento está vazia ou inacessível."
 
-    perguntas = [item["pergunta"] for item in base_conhecimento]
-    
-    vectorizer = TfidfVectorizer()
-    X = vectorizer.fit_transform(perguntas + [pergunta_usuario])
-    
-    similaridades = cosine_similarity(X[-1], X[:-1]).flatten()
-    indice_mais_similar = similaridades.argmax()
+    perguntas = [item["pergunta"] for item in base]
+    vectorizer = TfidfVectorizer().fit_transform(perguntas + [pergunta])
+    cosine_sim = cosine_similarity(vectorizer[-1], vectorizer[:-1]).flatten()
 
-    if similaridades[indice_mais_similar] < 0.2:
-        return "🤔 Desculpe, não encontrei uma resposta adequada para essa pergunta."
+    if max(cosine_sim) < 0.3:
+        return "🤔 Não encontrei uma resposta adequada na base de conhecimento."
 
-    item = base_conhecimento[indice_mais_similar]
-    resposta = item.get("resposta", "").strip()
-    modelo = item.get("modelo_email", "").strip()
+    idx = cosine_sim.argmax()
+    item = base[idx]
 
-    if not resposta:
-        return "❌ Esta pergunta não tem uma resposta definida."
+    resposta = f"{item['resposta']}".strip()
 
-    if modelo:
-        return f"**Resposta:**\n{resposta}\n\n---\n\n**✉️ Modelo de Email:**\n```\n{modelo}\n```"
-    else:
-        return f"**Resposta:**\n{resposta}"
+    if item.get("modelo"):
+        resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo'].strip()}\n```"
+
+    if item.get("email"):
+        resposta += f"\n\n📮 Para mais informações: `{item['email'].strip()}`"
+
+    return resposta
