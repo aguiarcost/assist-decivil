@@ -1,0 +1,19 @@
+# Evitar segredos e configurações locais
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+*.venv
+.env
+.venv
+*.sqlite3
+
+# VS Code
+.vscode/
+
+# MacOS
+.DS_Store
