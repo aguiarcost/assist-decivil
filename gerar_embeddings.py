@@ -1,35 +1,47 @@
+
 import openai
-import json
+import pickle
 import os
+import json
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import normalize
+import numpy as np
 
-# API key
-if "OPENAI_API_KEY" in os.environ:
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-
+CAMINHO_EMBEDDINGS = "embeddings.pkl"
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_EMBEDDINGS = "base_embeddings.json"
 
-def gerar_embeddings():
-    with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-        base = json.load(f)
+def carregar_base_conhecimento():
+    if os.path.exists(CAMINHO_CONHECIMENTO):
+        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
 
-    dados_emb = []
+def gerar_embedding_openai(texto):
+    try:
+        response = openai.embeddings.create(
+            model="text-embedding-ada-002",
+            input=texto
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        print(f"Erro ao gerar embedding: {e}")
+        return None
 
-    for item in base:
-        pergunta = item["pergunta"]
-        try:
-            response = openai.embeddings.create(
-                model="text-embedding-ada-002",
-                input=pergunta
-            )
-            embedding = response.data[0].embedding
-            dados_emb.append({"pergunta": pergunta, "embedding": embedding})
-            print(f"✅ Embedding gerado: {pergunta}")
-        except Exception as e:
-            print(f"Erro ao gerar embedding para: {pergunta}\n{e}")
+def guardar_na_base_com_embbeding(texto, origem="Documento carregado"):
+    base_conhecimento = carregar_base_conhecimento()
+    nova_entrada = {
+        "pergunta": origem,
+        "resposta": texto.strip(),
+        "email": "",
+        "modelo": ""
+    }
+    base_conhecimento.append(nova_entrada)
 
-    with open(CAMINHO_EMBEDDINGS, "w", encoding="utf-8") as f:
-        json.dump(dados_emb, f)
+    with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
+        json.dump(base_conhecimento, f, ensure_ascii=False, indent=2)
 
-if __name__ == "__main__":
-    gerar_embeddings()
+    # Gerar e guardar embedding
+    embedding = gerar_embedding_openai(origem)
+    if embedding:
+        with open(CAMINHO_EMBEDDINGS, "ab") as f:
+            pickle.dump((origem, embedding), f)
