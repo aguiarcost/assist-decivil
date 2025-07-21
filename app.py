@@ -6,11 +6,11 @@ from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from datetime import datetime
 
-# Inicialização de variáveis
+# Caminhos de ficheiros
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Chave da API
+# Chave OpenAI
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -18,7 +18,7 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Função auxiliar
+# Carrega a base de conhecimento
 @st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
@@ -29,6 +29,7 @@ def carregar_base_conhecimento():
             return []
     return []
 
+# Guarda pergunta no histórico
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
     if os.path.exists(CAMINHO_HISTORICO):
@@ -43,47 +44,53 @@ def guardar_pergunta_no_historico(pergunta):
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Interface
+# Configuração da página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
+
 st.markdown("""
     <style>
     .stApp {
         background-color: #fff3e0;
     }
-    .titulo-container {
+    .header-container {
         display: flex;
         align-items: center;
-        gap: 15px;
+        gap: 20px;
+        margin-bottom: 10px;
+        margin-top: -20px;
     }
-    .titulo-container h1 {
-        color: #ef6c00;
+    .header-container img {
+        width: 80px;
+        height: auto;
+        margin-top: 5px;
+    }
+    .header-container h1 {
+        color: #ef6c00 !important;
+        font-size: 2.2em;
         margin: 0;
-        padding-top: 10px;
-    }
-    .titulo-container img {
-        width: 70px;
-        margin-top: -5px;
+        padding: 0;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Título com imagem
+# Cabeçalho com avatar
 st.markdown(
     """
-    <div class="titulo-container">
-        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Avatar">
+    <div class="header-container">
+        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
         <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# Área de perguntas
+# Perguntas frequentes
 col1, col2 = st.columns(2)
+
 base_conhecimento = carregar_base_conhecimento()
+frequencia = {}
 
 # Frequência de uso
-frequencia = {}
 if os.path.exists(CAMINHO_HISTORICO):
     try:
         with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
@@ -95,28 +102,38 @@ if os.path.exists(CAMINHO_HISTORICO):
     except json.JSONDecodeError:
         pass
 
-# Dropdown de perguntas ordenadas por frequência
+# Perguntas ordenadas por uso
 perguntas_existentes = sorted(
     set(p["pergunta"] for p in base_conhecimento),
     key=lambda x: -frequencia.get(x, 0)
 )
 
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="pergunta_dropdown")
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
 
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
 
-pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
+# Manter estado da pergunta selecionada
+if "pergunta_final" not in st.session_state:
+    st.session_state.pergunta_final = ""
 
-# Geração da resposta
+if pergunta_manual.strip():
+    st.session_state.pergunta_final = pergunta_manual.strip()
+elif pergunta_dropdown and pergunta_dropdown != st.session_state.pergunta_final:
+    st.session_state.pergunta_final = pergunta_dropdown
+
+pergunta_final = st.session_state.pergunta_final
+resposta = ""
+
 if pergunta_final:
     resposta = gerar_resposta(pergunta_final)
     guardar_pergunta_no_historico(pergunta_final)
-    if resposta:
-        st.markdown("---")
-        st.subheader("💡 Resposta do assistente")
-        st.markdown(resposta, unsafe_allow_html=True)
+
+if resposta:
+    st.markdown("---")
+    st.subheader("💡 Resposta do assistente")
+    st.markdown(resposta, unsafe_allow_html=True)
 
 # Upload de documentos
 st.markdown("---")
@@ -141,7 +158,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Upload de novas perguntas via ficheiro JSON
+# Upload de novas perguntas
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -161,7 +178,7 @@ if novo_json:
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Inserção manual de perguntas
+# Formulário manual
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
@@ -175,7 +192,7 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
                 "pergunta": nova_pergunta,
                 "resposta": nova_resposta,
                 "email": novo_email,
-                "modelo_email": novo_modelo
+                "modelo": novo_modelo
             }
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
