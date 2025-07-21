@@ -1,4 +1,3 @@
-
 import json
 import openai
 import streamlit as st
@@ -31,9 +30,7 @@ def gerar_embedding(pergunta):
         )
         return response.data[0].embedding
     except Exception as e:
-        return f"❌ Erro ao gerar embedding da pergunta:
-
-{e}"
+        return f"❌ Erro ao gerar embedding da pergunta:\n\n{e}"
 
 def cosine_similarity(vec1, vec2):
     vec1, vec2 = np.array(vec1), np.array(vec2)
