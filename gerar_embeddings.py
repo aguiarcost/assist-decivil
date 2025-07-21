@@ -1,28 +1,46 @@
+
 import json
-import openai
+import os
+import numpy as np
+from openai import OpenAI
+from tqdm import tqdm
 
-# 🔑 Coloca aqui a tua chave da OpenAI
-openai.api_key = "COLA_AQUI_A_TUA_CHAVE"
+CAMINHO_BASE = "base_conhecimento.json"
+CAMINHO_EMBEDDINGS = "embeddings.npy"
+CAMINHO_INDICE = "indice.json"
 
-# 📄 Lê a base de conhecimento original
-with open("base_conhecimento.json", "r", encoding="utf-8") as f:
-    base = json.load(f)
+client = OpenAI()
 
-# 🔁 Adiciona embeddings a cada pergunta
-nova_base = []
-for entrada in base:
-    pergunta = entrada.get("pergunta")
-    if pergunta:
-        resposta = openai.embeddings.create(
-            input=pergunta,
+def gerar_embedding(texto):
+    try:
+        response = client.embeddings.create(
+            input=texto,
             model="text-embedding-3-small"
         )
-        embedding = resposta.data[0].embedding
-        entrada["embedding"] = embedding
-        nova_base.append(entrada)
+        return response.data[0].embedding
+    except Exception as e:
+        print(f"Erro ao gerar embedding para: {texto}\n{e}")
+        return None
 
-# 💾 Guarda novo ficheiro com embeddings
-with open("base_conhecimento_com_embeddings.json", "w", encoding="utf-8") as f:
-    json.dump(nova_base, f, ensure_ascii=False, indent=2)
+# Carregar base de conhecimento
+with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
+    base = json.load(f)
 
-print("✅ Embeddings criados com sucesso.")
+embeddings = []
+indice = []
+
+# Gerar embeddings
+for item in tqdm(base):
+    pergunta = item.get("pergunta")
+    if pergunta:
+        emb = gerar_embedding(pergunta)
+        if emb:
+            embeddings.append(emb)
+            indice.append(pergunta)
+
+# Guardar resultados
+np.save(CAMINHO_EMBEDDINGS, np.array(embeddings))
+with open(CAMINHO_INDICE, "w", encoding="utf-8") as f:
+    json.dump(indice, f, ensure_ascii=False, indent=2)
+
+print("Embeddings gerados com sucesso.")
