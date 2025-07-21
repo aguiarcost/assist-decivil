@@ -5,35 +5,39 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 
-def carregar_base():
+def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-            return json.load(f)
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return []
     return []
 
-def gerar_resposta(pergunta):
-    base = carregar_base()
-    if not base:
-        return "⚠️ Base de conhecimento vazia."
+def gerar_resposta(pergunta_usuario):
+    base_conhecimento = carregar_base_conhecimento()
+    if not base_conhecimento:
+        return "⚠️ A base de conhecimento está vazia."
 
-    perguntas = [item["pergunta"] for item in base]
-    respostas = [item["resposta"] for item in base]
-
+    perguntas = [item["pergunta"] for item in base_conhecimento]
+    
     vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(perguntas)
-    pergunta_vec = vectorizer.transform([pergunta])
-    similaridades = cosine_similarity(pergunta_vec, tfidf_matrix).flatten()
+    X = vectorizer.fit_transform(perguntas + [pergunta_usuario])
+    
+    similaridades = cosine_similarity(X[-1], X[:-1]).flatten()
+    indice_mais_similar = similaridades.argmax()
 
-    idx_mais_similar = similaridades.argmax()
-    if similaridades[idx_mais_similar] < 0.3:
-        return "🤷‍♂️ Desculpe, não encontrei uma resposta adequada."
+    if similaridades[indice_mais_similar] < 0.2:
+        return "🤔 Desculpe, não encontrei uma resposta adequada para essa pergunta."
 
-    entrada = base[idx_mais_similar]
-    resposta = f"{entrada['resposta']}"
+    item = base_conhecimento[indice_mais_similar]
+    resposta = item.get("resposta", "").strip()
+    modelo = item.get("modelo_email", "").strip()
 
-    if entrada.get("email"):
-        resposta += f"\n\n✉️ **Email de contacto sugerido:** `{entrada['email']}`"
-    if entrada.get("modelo"):
-        resposta += f"\n\n📄 **Modelo de email sugerido:**\n\n```\n{entrada['modelo']}\n```"
+    if not resposta:
+        return "❌ Esta pergunta não tem uma resposta definida."
 
-    return resposta
+    if modelo:
+        return f"**Resposta:**\n{resposta}\n\n---\n\n**✉️ Modelo de Email:**\n```\n{modelo}\n```"
+    else:
+        return f"**Resposta:**\n{resposta}"
