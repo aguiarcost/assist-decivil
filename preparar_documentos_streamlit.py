@@ -49,7 +49,7 @@ def extrair_texto(file_or_url):
     if isinstance(file_or_url, str) and file_or_url.startswith("http"):
         return extrair_texto_website(file_or_url), file_or_url
 
-    nome = file_or_url.name.lower()
+    nome = file_or_url.name.lower() if hasattr(file_or_url, 'name') else os.path.basename(file_or_url).lower()
     if nome.endswith(".pdf"):
         return extrair_texto_pdf(file_or_url), nome
     elif nome.endswith(".docx"):
@@ -61,7 +61,8 @@ def extrair_texto(file_or_url):
 
 def extrair_texto_pdf(file):
     texto = ""
-    with fitz.open(stream=file.read(), filetype="pdf") as doc:
+    stream = file if isinstance(file, bytes) else file.read()
+    with fitz.open(stream=stream, filetype="pdf") as doc:
         for page in doc:
             texto += page.get_text()
     return texto
