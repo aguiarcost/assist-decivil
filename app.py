@@ -17,9 +17,10 @@ CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
 MESSAGE_QUEUE = Queue()  # Fila para mensagens de processamento
 
-# Inicializa base_documents_vector em session_state no topo
+# Inicializa base_documents_vector em session_state no topo com fallback
 if 'base_documents_vector' not in st.session_state:
     st.session_state.base_documents_vector = []
+st.write("Session state initialized with base_documents_vector")  # Debug output
 
 # Configuração da página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
@@ -119,18 +120,23 @@ def processar_documentos_pasta(force_reprocess=False):
 def processar_em_background(force_reprocess=False):
     processar_documentos_pasta(force_reprocess)
 
-# Chama o processamento em background ao iniciar a app, mas apenas uma vez
+# Chama o processamento em background apenas após interação do usuário
 if 'documents_processed' not in st.session_state:
     st.session_state.documents_processed = False
 
-if not st.session_state.documents_processed:
-    threading.Thread(target=processar_em_background).start()
-    st.session_state.documents_processed = True
+if st.button("Iniciar Processamento em Background"):
+    if not st.session_state.documents_processed:
+        threading.Thread(target=processar_em_background).start()
+        st.session_state.documents_processed = True
+        st.info("Processamento em background iniciado. Verifique os logs para progresso.")
 
 # Placeholder para mostrar mensagens de processamento
 processing_placeholder = st.empty()
 with processing_placeholder.container():
-    st.info("Processamento de documentos em background...")
+    if not st.session_state.documents_processed:
+        st.info("Clique em 'Iniciar Processamento em Background' para processar documentos.")
+    else:
+        st.info("Processamento de documentos em background em andamento...")
 
 # Thread para atualizar mensagens da fila na UI
 def update_processing_messages():
