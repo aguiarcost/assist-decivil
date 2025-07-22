@@ -54,6 +54,8 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.85):
                 idx = int(np.argmax(sims_knowledge))
                 item = knowledge_data[idx]
                 resposta = item["resposta"]
+                if item.get("email"):
+                    resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
                 modelo = item.get("modelo_email", "")
                 if modelo:
                     resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
