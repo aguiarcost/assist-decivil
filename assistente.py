@@ -8,12 +8,20 @@ import numpy as np
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Caminhos unificados
+CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
 CAMINHO_DOCUMENTS_VECTOR = "base_documents_vector.json"
 
 # Carregar dados
 def carregar_dados():
-    # Knowledge (Q&A)
+    # Base de conhecimento (Q&A)
+    if os.path.exists(CAMINHO_CONHECIMENTO):
+        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+            knowledge_base = json.load(f)
+    else:
+        knowledge_base = []
+    
+    # Embeddings da base de conhecimento
     if os.path.exists(CAMINHO_KNOWLEDGE_VECTOR):
         with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8") as f:
             knowledge_data = json.load(f)
@@ -23,7 +31,7 @@ def carregar_dados():
     knowledge_embeddings = np.array([item["embedding"] for item in knowledge_data]) if knowledge_data else np.array([])
     knowledge_perguntas = [item["pergunta"] for item in knowledge_data]
     
-    # Documents (chunks)
+    # Documentos (chunks)
     if os.path.exists(CAMINHO_DOCUMENTS_VECTOR):
         with open(CAMINHO_DOCUMENTS_VECTOR, "r", encoding="utf-8") as f:
             documents_data = json.load(f)
@@ -32,18 +40,30 @@ def carregar_dados():
     
     documents_embeddings = np.array([item["embedding"] for item in documents_data]) if documents_data else np.array([])
     
-    return knowledge_data, knowledge_perguntas, knowledge_embeddings, documents_data, documents_embeddings
+    return knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings, documents_data, documents_embeddings
 
-knowledge_data, knowledge_perguntas, knowledge_embeddings, documents_data, documents_embeddings = carregar_dados()
+knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings, documents_data, documents_embeddings = carregar_dados()
 
 # Gerar embedding
 def get_embedding(text):
     response = openai.embeddings.create(model="text-embedding-3-small", input=text)
     return np.array(response.data[0].embedding).reshape(1, -1)
 
-# Gerar resposta com RAG
-def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.85):
+# Gerar resposta
+def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
     try:
+        # Verificar correspondência exata na base de conhecimento (para dropdown)
+        for item in knowledge_base:
+            if item["pergunta"].strip().lower() == pergunta_utilizador.strip().lower():
+                resposta = item["resposta"]
+                if item.get("email"):
+                    resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
+                modelo = item.get("modelo_email", "")
+                if modelo:
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+                return resposta + "\n\n(Fonte: Base de conhecimento, correspondência exata)"
+        
+        # Se não houver correspondência exata, usar busca por similaridade
         embedding_utilizador = get_embedding(pergunta_utilizador)
         
         # Busca na base de conhecimento
@@ -87,3 +107,5 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.85):
         return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento ou documentos."
     except Exception as e:
         return f"❌ Erro ao gerar resposta: {str(e)}"
+```
+
