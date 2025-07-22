@@ -107,5 +107,4 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
         return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento ou documentos."
     except Exception as e:
         return f"❌ Erro ao gerar resposta: {str(e)}"
-```
 
