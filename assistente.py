@@ -16,15 +16,23 @@ CAMINHO_DOCUMENTS_VECTOR = "base_documents_vector.json"
 def carregar_dados():
     # Base de conhecimento (Q&A)
     if os.path.exists(CAMINHO_CONHECIMENTO):
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
-            knowledge_base = json.load(f)
+        try:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
+                knowledge_base = json.load(f)
+        except json.JSONDecodeError:
+            print("Erro ao decodificar base_conhecimento.json; inicializando como vazio.")
+            knowledge_base = []
     else:
         knowledge_base = []
     
     # Embeddings da base de conhecimento
     if os.path.exists(CAMINHO_KNOWLEDGE_VECTOR):
-        with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
-            knowledge_data = json.load(f)
+        try:
+            with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
+                knowledge_data = json.load(f)
+        except json.JSONDecodeError:
+            print("Erro ao decodificar base_knowledge_vector.json; inicializando como vazio.")
+            knowledge_data = []
     else:
         knowledge_data = []
     
@@ -33,8 +41,12 @@ def carregar_dados():
     
     # Documentos (chunks)
     if os.path.exists(CAMINHO_DOCUMENTS_VECTOR):
-        with open(CAMINHO_DOCUMENTS_VECTOR, "r", encoding="utf-8-sig") as f:
-            documents_data = json.load(f)
+        try:
+            with open(CAMINHO_DOCUMENTS_VECTOR, "r", encoding="utf-8-sig") as f:
+                documents_data = json.load(f)
+        except json.JSONDecodeError:
+            print("Erro ao decodificar base_documents_vector.json; inicializando como vazio.")
+            documents_data = []
     else:
         documents_data = []
     
