@@ -6,12 +6,13 @@ from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
-import glob  # Novo: Para listar arquivos na pasta
+import glob  # Para listar arquivos na pasta
+import threading  # Para processamento em background
 
 # Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
-PASTA_DOCUMENTOS = "documentos"  # Novo: Pasta com documentos a processar automaticamente
+PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
 
 # Configuração da página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
@@ -84,7 +85,7 @@ else:
     st.warning("⚠️ A chave da API não está definida.")
 
 # Novo: Processar documentos da pasta "documentos" automaticamente na inicialização
-def processar_documentos_pasta():
+def processar_documentos_pasta(force_reprocess=False):
     if not os.path.exists(PASTA_DOCUMENTOS):
         os.makedirs(PASTA_DOCUMENTOS)  # Cria a pasta se não existir
     documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))  # Lista todos os arquivos na pasta
@@ -92,7 +93,7 @@ def processar_documentos_pasta():
 
     # Carrega documentos já processados do JSON
     processados = set()  # Usa set para eficiência
-    if os.path.exists("base_documents_vector.json"):
+    if os.path.exists("base_documents_vector.json") and not force_reprocess:
         try:
             with open("base_documents_vector.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -103,20 +104,28 @@ def processar_documentos_pasta():
 
     for doc_path in documentos:
         basename = os.path.basename(doc_path)
-        if doc_path not in processados:
-            print(f"Processando novo documento: {basename}")
+        if basename not in processados or force_reprocess:
+            print(f"Processando {basename} (force: {force_reprocess})...")
             try:
                 with open(doc_path, "rb") as f:
-                    processar_documento(f)  # Processa o arquivo
-                st.success(f"✅ Documento {basename} processado e salvo.")
+                    salvos = processar_documento(f)
+                st.success(f"✅ Documento {basename} processado com {salvos} blocos salvos.")
             except Exception as e:
                 st.error(f"Erro ao processar {basename}: {e}")
                 print(f"Detalhes do erro: {e}")
         else:
             print(f"Ignorando {basename}: já processado.")
 
-# Chama a função de processamento automático ao iniciar a app
-processar_documentos_pasta()  # Remove a dependência de st.session_state para usar JSON como referência
+# Função para processar em background
+def processar_em_background(force_reprocess=False):
+    processar_documentos_pasta(force_reprocess)
+
+# Chama o processamento em background ao iniciar a app
+threading.Thread(target=processar_em_background).start()
+
+# Botão opcional para forçar reprocessamento (para testes)
+if st.button("Forçar Reprocessamento de Documentos"):
+    threading.Thread(target=processar_em_background, args=(True,)).start()
 
 # Interface de pergunta
 base_conhecimento = carregar_base_conhecimento()
