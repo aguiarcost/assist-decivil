@@ -7,15 +7,15 @@ from preparar_documentos_streamlit import processar_documento
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 import glob  # Para listar arquivos na pasta
-import threading  # Para processamento em background
-from queue import Queue  # Para fila de mensagens
-import time  # Para o loop de atualização
+# Para processamento em background
+# Para fila de mensagens
+# Para o loop de atualização
 
 # Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
-MESSAGE_QUEUE = Queue()  # Fila para mensagens de processamento
+  # Fila para mensagens de processamento
 
 # Inicializa base_documents_vector em session_state no topo com fallback
 if 'base_documents_vector' not in st.session_state:
@@ -113,16 +113,15 @@ def processar_documentos_pasta(force_reprocess=False):
             try:
                 with open(doc_path, "rb") as f:
                     salvos = processar_documento(f)
-                MESSAGE_QUEUE.put(("success", f"✅ Documento {basename} processado com {salvos} blocos salvos."))
+                st.success(("success", f"✅ Documento {basename} processado com {salvos} blocos salvos."))
             except Exception as e:
-                MESSAGE_QUEUE.put(("error", f"Erro ao processar {basename}: {e}"))
+                st.success(("error", f"Erro ao processar {basename}: {e}"))
                 print(f"Detalhes do erro: {e}")
         else:
             print(f"Ignorando {basename}: já processado.")
 
 # Função para processar em background
-def processar_em_background(force_reprocess=False):
-    processar_documentos_pasta(force_reprocess)
+
 
 # Chama o processamento em background apenas após interação do usuário
 if 'documents_processed' not in st.session_state:
@@ -197,7 +196,7 @@ with col4:
 
 # Botão de reprocessamento junto à zona de upload
 if st.button("Forçar Reprocessamento de Documentos"):
-    threading.Thread(target=processar_em_background, args=(True,)).start()
+    processar_documentos_pasta(force_reprocess)
     st.info("Reprocessamento iniciado em background. Verifique os logs no console para progresso.")
 
 # Atualização manual da base de conhecimento
@@ -256,7 +255,7 @@ with processing_placeholder.container():
     if not st.session_state.documents_processed:
         if st.button("Iniciar Processamento em Background"):
             if not st.session_state.documents_processed:
-                threading.Thread(target=processar_em_background).start()
+                processar_documentos_pasta(force_reprocess)
                 st.session_state.documents_processed = True
                 st.info("Processamento em background iniciado. Verifique os logs para progresso.")
     else:
