@@ -131,3 +131,10 @@ def processar_documento(file_or_url):
     if salvos == 0:
         raise RuntimeError(f"Nenhum bloco salvo para {origem}. Verifique texto extraído.")
     return salvos  # Retorne o número de salvos para verificação em app.py
+
+
+import json
+
+# Guardar vetor de documentos no final do processamento
+with open("base_documents_vector.json", "w", encoding="utf-8") as f:
+    json.dump(st.session_state.base_documents_vector, f, ensure_ascii=False, indent=2)
