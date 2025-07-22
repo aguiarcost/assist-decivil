@@ -2,16 +2,15 @@ import openai
 import json
 import os
 import time
-from dotenv import load_dotenv
 
-# Carregar a chave da API a partir do secrets.toml via variável de ambiente
+# Carregar chave API
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Caminhos
 CAMINHO_BASE = "base_conhecimento.json"
-CAMINHO_VETORES = "base_vectorizada.json"
+CAMINHO_VETORES = "base_knowledge_vector.json"
 
-# Modelo de embedding recomendado
+# Modelo de embedding
 EMBEDDING_MODEL = "text-embedding-3-small"
 
 def gerar_embedding(texto, tentativas=3):
@@ -52,7 +51,7 @@ def main():
     with open(CAMINHO_VETORES, "w", encoding="utf-8") as f:
         json.dump(base_vectorizada, f, ensure_ascii=False, indent=2)
 
-    print("✅ Embeddings gerados e guardados em base_vectorizada.json")
+    print("✅ Embeddings gerados e guardados em base_knowledge_vector.json")
 
 if __name__ == "__main__":
     main()
