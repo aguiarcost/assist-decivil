@@ -196,5 +196,4 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
 # Rodapé com data e autor
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: gray;'>© 2025 AAC</p>", unsafe_allow_html=True)
-```
 
