@@ -3,7 +3,7 @@ import json
 import os
 import openai
 from assistente import gerar_resposta
-from preparar_documentos_streamlit import processar_documento, JSON_LOCK
+from preparar_documentos_streamlit import processar_documento
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 import glob  # Para listar arquivos na pasta
@@ -16,6 +16,10 @@ CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
 MESSAGE_QUEUE = Queue()  # Fila para mensagens de processamento
+
+# Inicializa base_documents_vector em session_state
+if 'base_documents_vector' not in st.session_state:
+    st.session_state.base_documents_vector = []
 
 # Configuração da página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
@@ -94,18 +98,8 @@ def processar_documentos_pasta(force_reprocess=False):
     documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))  # Lista todos os arquivos na pasta
     print(f"Documentos encontrados na pasta: {documentos}")
 
-    # Carrega documentos já processados do JSON com lock
-    processados = set()
-    with JSON_LOCK:
-        if os.path.exists("base_documents_vector.json") and not force_reprocess:
-            try:
-                with open("base_documents_vector.json", "r", encoding="utf-8-sig") as f:
-                    data = json.load(f)
-                    processados = {os.path.basename(item['origem']) for item in data}
-                    print(f"Documentos já processados carregados: {processados}")
-            except json.JSONDecodeError:
-                print("JSON corrompido; reiniciando lista de processados.")
-                pass
+    # Carrega documentos já processados da session_state
+    processados = {os.path.basename(item['origem']) for item in st.session_state.base_documents_vector}
 
     for doc_path in documentos:
         basename = os.path.basename(doc_path)
