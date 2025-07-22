@@ -196,7 +196,7 @@ with col4:
 
 # Botão de reprocessamento junto à zona de upload
 if st.button("Forçar Reprocessamento de Documentos"):
-    processar_documentos_pasta(force_reprocess)
+    processar_documentos_pasta(True)
     st.info("Reprocessamento iniciado em background. Verifique os logs no console para progresso.")
 
 # Atualização manual da base de conhecimento
@@ -255,7 +255,7 @@ with processing_placeholder.container():
     if not st.session_state.documents_processed:
         if st.button("Iniciar Processamento em Background"):
             if not st.session_state.documents_processed:
-                processar_documentos_pasta(force_reprocess)
+                processar_documentos_pasta(True)
                 st.session_state.documents_processed = True
                 st.info("Processamento em background iniciado. Verifique os logs para progresso.")
     else:
