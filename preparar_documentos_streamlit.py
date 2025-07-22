@@ -46,7 +46,7 @@ def gerar_embedding(texto, tentativas=5):
 def guardar_embedding(origem, pagina, texto, embedding):
     try:
         if os.path.exists(CAMINHO_BASE):
-            with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
+            with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:  # Usa utf-8-sig para lidar com BOM
                 base = json.load(f)
         else:
             base = []
@@ -69,7 +69,7 @@ def guardar_embedding(origem, pagina, texto, embedding):
         print(f"Erro ao salvar JSON: {e}")
         raise
 
-# Extrair texto
+# Extrair texto com limpeza de encoding
 def extrair_texto(file_or_url):
     try:
         if isinstance(file_or_url, str) and file_or_url.startswith("http"):
@@ -89,7 +89,9 @@ def extrair_texto(file_or_url):
             else:
                 raise ValueError(f"Tipo de ficheiro não suportado: {nome}")
         
-        print(f"Texto extraído de {origem}: {len(texto)} caracteres")
+        # Limpeza de encoding: Substitui bytes inválidos para UTF-8
+        texto = texto.encode('utf-8', 'replace').decode('utf-8')
+        print(f"Texto extraído e limpo de {origem}: {len(texto)} caracteres")
         return texto, origem
     except Exception as e:
         print(f"Erro ao extrair texto de {origem if 'origem' in locals() else file_or_url}: {e}")
@@ -114,7 +116,7 @@ def extrair_texto_docx(file):
     return "\n".join([para.text for para in doc.paragraphs])
 
 def extrair_texto_txt(file):
-    return file.read().decode("utf-8")
+    return file.read().decode("utf-8", errors='replace')  # Adiciona errors='replace' para TXT também
 
 def extrair_texto_website(url):
     try:
