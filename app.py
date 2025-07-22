@@ -119,8 +119,13 @@ def processar_documentos_pasta(force_reprocess=False):
 def processar_em_background(force_reprocess=False):
     processar_documentos_pasta(force_reprocess)
 
-# Chama o processamento em background ao iniciar a app
-threading.Thread(target=processar_em_background).start()
+# Chama o processamento em background ao iniciar a app, mas apenas uma vez
+if 'documents_processed' not in st.session_state:
+    st.session_state.documents_processed = False
+
+if not st.session_state.documents_processed:
+    threading.Thread(target=processar_em_background).start()
+    st.session_state.documents_processed = True
 
 # Placeholder para mostrar mensagens de processamento
 processing_placeholder = st.empty()
