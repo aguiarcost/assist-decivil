@@ -6,9 +6,11 @@ import openai
 import requests
 from bs4 import BeautifulSoup
 import time  # Para sleep em reintentos
+import threading  # Para lock
 
 # Caminho da base vetorizada para documentos
 CAMINHO_BASE = "base_documents_vector.json"
+JSON_LOCK = threading.Lock()  # Lock para sincronizar acesso ao JSON
 
 # Obter chave da API
 openai.api_key = os.getenv("OPENAI_API_KEY", "")
@@ -44,30 +46,31 @@ def gerar_embedding(texto, tentativas=5):
 
 # Guardar bloco com embedding
 def guardar_embedding(origem, pagina, texto, embedding):
-    try:
-        if os.path.exists(CAMINHO_BASE):
-            with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:  # Usa utf-8-sig para lidar com BOM
-                base = json.load(f)
-        else:
+    with JSON_LOCK:  # Lock para evitar corrupção
+        try:
+            if os.path.exists(CAMINHO_BASE):
+                with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:
+                    base = json.load(f)
+            else:
+                base = []
+        except json.JSONDecodeError:
+            print("Arquivo JSON corrompido; reiniciando como vazio.")
             base = []
-    except json.JSONDecodeError:
-        print("Arquivo JSON corrompido; reiniciando como vazio.")
-        base = []
 
-    base.append({
-        "origem": origem,
-        "pagina": pagina,
-        "texto": texto,
-        "embedding": embedding
-    })
+        base.append({
+            "origem": origem,
+            "pagina": pagina,
+            "texto": texto,
+            "embedding": embedding
+        })
 
-    try:
-        with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
-            json.dump(base, f, ensure_ascii=False, indent=2)
-        print(f"✅ Bloco salvo: {origem}, página {pagina}")
-    except Exception as e:
-        print(f"Erro ao salvar JSON: {e}")
-        raise
+        try:
+            with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
+                json.dump(base, f, ensure_ascii=False, indent=2)
+            print(f"✅ Bloco salvo: {origem}, página {pagina}")
+        except Exception as e:
+            print(f"Erro ao salvar JSON: {e}")
+            raise
 
 # Extrair texto com limpeza de encoding
 def extrair_texto(file_or_url):
