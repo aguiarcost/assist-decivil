@@ -6,22 +6,13 @@ import openai
 import requests
 from bs4 import BeautifulSoup
 import time  # Para sleep em reintentos
-import threading  # Para lock
+import streamlit as st  # Import Streamlit for st.session_state
 
-# Caminho da base vetorizada para documentos
-CAMINHO_BASE = "base_documents_vector.json"
-JSON_LOCK = threading.Lock()  # Lock para sincronizar acesso ao JSON
+# Use st.session_state for the vector base (persistent in session)
+if 'base_documents_vector' not in st.session_state:
+    st.session_state.base_documents_vector = []  # Inicializa como lista vazia
 
-# Obter chave da API
-openai.api_key = os.getenv("OPENAI_API_KEY", "")
-
-# Inicializar o arquivo JSON se não existir
-if not os.path.exists(CAMINHO_BASE):
-    with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
-        json.dump([], f, ensure_ascii=False, indent=2)
-    print(f"✅ Arquivo {CAMINHO_BASE} criado vazio.")
-
-# Gerar embedding com reintentos e timeout
+# Gerar embedding with retries and timeout (unchanged)
 def gerar_embedding(texto, tentativas=5):
     if not openai.api_key:
         raise RuntimeError("Chave API OpenAI não definida.")
@@ -44,60 +35,19 @@ def gerar_embedding(texto, tentativas=5):
                 time.sleep(2 ** tentativa)  # Backoff exponencial
     raise RuntimeError(f"Falha ao gerar embedding após {tentativas} tentativas.")
 
-# Guardar bloco com embedding
+# Guardar bloco with embedding (use st.session_state instead of file)
 def guardar_embedding(origem, pagina, texto, embedding):
-    with JSON_LOCK:  # Lock para evitar corrupção
-        try:
-            if os.path.exists(CAMINHO_BASE):
-                try:
-                    with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:
-                        base = json.load(f)
-                except json.JSONDecodeError as e:
-                    print(f"Erro ao carregar JSON: {e}. Tentando reparar...")
-                    with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_raw:
-                        content = f_raw.read()
-                        try:
-                            # Tenta extrair dados válidos até o erro
-                            valid_json = []
-                            for line in content.splitlines():
-                                try:
-                                    valid_json.extend(json.loads(line))
-                                except json.JSONDecodeError:
-                                    continue
-                            base = valid_json if valid_json else []
-                            print("Dados válidos extraídos com sucesso.")
-                        except:
-                            base = []  # Fallback para vazio se não puder reparar
-                            print("Reparado ou reiniciado como vazio.")
-            else:
-                base = []
-        except Exception as e:
-            print(f"Erro ao acessar JSON: {e}. Reiniciando como vazio.")
-            base = []
+    base = st.session_state.base_documents_vector
+    base.append({
+        "origem": origem,
+        "pagina": pagina,
+        "texto": texto,
+        "embedding": embedding
+    })
+    st.session_state.base_documents_vector = base  # Update session state
+    print(f"✅ Bloco salvo in session_state: {origem}, página {pagina}")
 
-        base.append({
-            "origem": origem,
-            "pagina": pagina,
-            "texto": texto,
-            "embedding": embedding
-        })
-
-        try:
-            with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
-                json.dump(base, f, ensure_ascii=False, indent=2)
-            # Validação pós-escrita
-            with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_check:
-                check_data = json.load(f_check)
-                if len(check_data) != len(base):
-                    print(f"Erro: Número de entradas esperadas ({len(base)}) não corresponde ao salvo ({len(check_data)}). Tentando corrigir...")
-                    with open(CAMINHO_BASE, "w", encoding="utf-8") as f_fix:
-                        json.dump(base, f_fix, ensure_ascii=False, indent=2)
-            print(f"✅ Bloco salvo: {origem}, página {pagina}")
-        except Exception as e:
-            print(f"Erro ao salvar JSON: {e}")
-            raise
-
-# Extrair texto com limpeza de encoding
+# Extrair texto with encoding cleanup (unchanged)
 def extrair_texto(file_or_url):
     try:
         if isinstance(file_or_url, str) and file_or_url.startswith("http"):
