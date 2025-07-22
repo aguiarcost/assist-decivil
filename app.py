@@ -6,10 +6,12 @@ from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
+import glob  # Novo: Para listar arquivos na pasta
 
 # Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
+PASTA_DOCUMENTOS = "documentos"  # Novo: Pasta com documentos a processar automaticamente
 
 # Configuração da página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
@@ -81,6 +83,33 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
+# Novo: Processar documentos da pasta "documentos" automaticamente na inicialização
+def processar_documentos_pasta():
+    if not os.path.exists(PASTA_DOCUMENTOS):
+        os.makedirs(PASTA_DOCUMENTOS)  # Cria a pasta se não existir
+    documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))  # Lista todos os arquivos na pasta
+    processados = []  # Para evitar reprocessar se já feito
+    if os.path.exists("base_documents_vector.json"):
+        with open("base_documents_vector.json", "r", encoding="utf-8") as f:
+            try:
+                data = json.load(f)
+                processados = [item['origem'] for item in data]
+            except json.JSONDecodeError:
+                pass
+    for doc_path in documentos:
+        if doc_path not in processados:
+            try:
+                with open(doc_path, "rb") as f:
+                    processar_documento(f)  # Processa o arquivo como file_uploader faria
+                st.success(f"✅ Documento {os.path.basename(doc_path)} processado automaticamente.")
+            except Exception as e:
+                st.error(f"Erro ao processar {os.path.basename(doc_path)}: {e}")
+
+# Chama a função de processamento automático ao iniciar a app
+if not st.session_state.get("documentos_processados", False):
+    processar_documentos_pasta()
+    st.session_state["documentos_processados"] = True
+
 # Interface de pergunta
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
@@ -107,7 +136,7 @@ with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
 # Toggle para RAG
-use_documents = st.checkbox("Procurar também em documentos adicionados", value=True)
+use_documents = st.checkbox("Buscar também em documentos adicionados (RAG)", value=True)
 
 # Determinar pergunta final
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
