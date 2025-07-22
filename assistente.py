@@ -1,55 +1,38 @@
 import openai
 import os
 import json
-from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+import streamlit as st  # Import for st.session_state
 
 # Carregar chave API
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Caminhos unificados
+# Caminhos unificados (not used for vector base now)
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
-CAMINHO_DOCUMENTS_VECTOR = "base_documents_vector.json"
 
 # Carregar dados
 def carregar_dados():
     # Base de conhecimento (Q&A)
     if os.path.exists(CAMINHO_CONHECIMENTO):
-        try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
-                knowledge_base = json.load(f)
-        except json.JSONDecodeError:
-            print("Erro ao decodificar base_conhecimento.json; inicializando como vazio.")
-            knowledge_base = []
+        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
+            knowledge_base = json.load(f)
     else:
         knowledge_base = []
     
     # Embeddings da base de conhecimento
     if os.path.exists(CAMINHO_KNOWLEDGE_VECTOR):
-        try:
-            with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
-                knowledge_data = json.load(f)
-        except json.JSONDecodeError:
-            print("Erro ao decodificar base_knowledge_vector.json; inicializando como vazio.")
-            knowledge_data = []
+        with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
+            knowledge_data = json.load(f)
     else:
         knowledge_data = []
     
     knowledge_embeddings = np.array([item["embedding"] for item in knowledge_data]) if knowledge_data else np.array([])
     knowledge_perguntas = [item["pergunta"] for item in knowledge_data]
     
-    # Documentos (chunks)
-    if os.path.exists(CAMINHO_DOCUMENTS_VECTOR):
-        try:
-            with open(CAMINHO_DOCUMENTS_VECTOR, "r", encoding="utf-8-sig") as f:
-                documents_data = json.load(f)
-        except json.JSONDecodeError:
-            print("Erro ao decodificar base_documents_vector.json; inicializando como vazio.")
-            documents_data = []
-    else:
-        documents_data = []
-    
+    # Documentos (chunks) from st.session_state
+    documents_data = st.session_state.base_documents_vector
     documents_embeddings = np.array([item["embedding"] for item in documents_data]) if documents_data else np.array([])
     
     return knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings, documents_data, documents_embeddings
@@ -110,12 +93,4 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
                 prompt = f"Baseado no contexto seguinte, responde à pergunta: {pergunta_utilizador}\n\nContexto:{context}\n\nResposta:"
                 response = openai.chat.completions.create(
                     model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=300
-                )
-                generated = response.choices[0].message.content.strip()
-                return generated + f"\n\n(Fonte: Documentos processados - {', '.join(sources)})"
-        
-        return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento ou documentos."
-    except Exception as e:
-        return f"❌ Erro ao gerar resposta: {str(e)}"
+                    messages
