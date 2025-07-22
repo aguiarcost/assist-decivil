@@ -98,6 +98,7 @@ def processar_documentos_pasta(force_reprocess=False):
             with open("base_documents_vector.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
                 processados = {item['origem'] for item in data}
+                print(f"Documentos já processados carregados: {processados}")
         except json.JSONDecodeError:
             print("JSON corrompido; reiniciando lista de processados.")
             pass
@@ -123,10 +124,6 @@ def processar_em_background(force_reprocess=False):
 # Chama o processamento em background ao iniciar a app
 threading.Thread(target=processar_em_background).start()
 
-# Botão opcional para forçar reprocessamento (para testes)
-if st.button("Forçar Reprocessamento de Documentos"):
-    threading.Thread(target=processar_em_background, args=(True,)).start()
-
 # Interface de pergunta
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
@@ -148,7 +145,12 @@ perguntas_existentes = sorted(
 
 col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="dropdown")
+    pergunta_dropdown = st.selectbox(
+        "Escolha uma pergunta frequente:", 
+        [""] + perguntas_existentes, 
+        key="dropdown",
+        on_change=st.rerun  # Força rerun ao mudar a seleção para atualizar imediatamente
+    )
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
@@ -189,6 +191,10 @@ with col4:
             st.success("✅ Conteúdo do link processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
+
+# Botão de reprocessamento junto à zona de upload
+if st.button("Forçar Reprocessamento de Documentos"):
+    threading.Thread(target=processar_em_background, args=(True,)).start()
 
 # Atualização manual da base de conhecimento
 st.markdown("---")
