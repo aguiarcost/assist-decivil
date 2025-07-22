@@ -95,7 +95,7 @@ def processar_documentos_pasta(force_reprocess=False):
     processados = set()  # Usa set para eficiência
     if os.path.exists("base_documents_vector.json") and not force_reprocess:
         try:
-            with open("base_documents_vector.json", "r", encoding="utf-8") as f:
+            with open("base_documents_vector.json", "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
                 processados = {os.path.basename(item['origem']) for item in data}  # Usa basename para consistência
                 print(f"Documentos já processados carregados: {processados}")
@@ -152,9 +152,13 @@ with col1:
         on_change=st.rerun  # Força rerun ao mudar a seleção para atualizar imediatamente
     )
 with col2:
-    pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
+    pergunta_manual = st.text_input(
+        "Ou escreva a sua pergunta:", 
+        key="manual",
+        on_change=lambda: st.session_state.update({"dropdown": ""})  # Limpa dropdown ao mudar manual
+    )
 
-# Determinar pergunta final
+# Determinar pergunta final (prioriza manual se preenchido)
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
 # Gerar resposta (sempre com RAG nos documentos)
