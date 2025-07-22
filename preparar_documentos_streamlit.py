@@ -20,7 +20,7 @@ if not os.path.exists(CAMINHO_BASE):
     print(f"✅ Arquivo {CAMINHO_BASE} criado vazio.")
 
 # Gerar embedding com reintentos
-def gerar_embedding(texto, tentativas=3):
+def gerar_embedding(texto, tentativas=5):  # Aumentei para 5 tentativas
     if not openai.api_key:
         raise RuntimeError("Chave API OpenAI não definida.")
     for tentativa in range(tentativas):
@@ -66,32 +66,42 @@ def guardar_embedding(origem, pagina, texto, embedding):
 
 # Extrair texto
 def extrair_texto(file_or_url):
-    if isinstance(file_or_url, str) and file_or_url.startswith("http"):
-        texto = extrair_texto_website(file_or_url)
-        origem = file_or_url
-    else:
-        nome = file_or_url.name.lower() if hasattr(file_or_url, 'name') else os.path.basename(file_or_url).lower()
-        if nome.endswith(".pdf"):
-            texto = extrair_texto_pdf(file_or_url)
-            origem = nome
-        elif nome.endswith(".docx"):
-            texto = extrair_texto_docx(file_or_url)
-            origem = nome
-        elif nome.endswith(".txt"):
-            texto = extrair_texto_txt(file_or_url)
-            origem = nome
+    try:
+        if isinstance(file_or_url, str) and file_or_url.startswith("http"):
+            texto = extrair_texto_website(file_or_url)
+            origem = file_or_url
         else:
-            raise ValueError("Tipo de ficheiro não suportado.")
-    
-    print(f"Texto extraído de {origem}: {len(texto)} caracteres")
-    return texto, origem
+            nome = file_or_url.name.lower() if hasattr(file_or_url, 'name') else os.path.basename(file_or_url).lower()
+            if nome.endswith(".pdf"):
+                texto = extrair_texto_pdf(file_or_url)
+                origem = nome
+            elif nome.endswith(".docx"):
+                texto = extrair_texto_docx(file_or_url)
+                origem = nome
+            elif nome.endswith(".txt"):
+                texto = extrair_texto_txt(file_or_url)
+                origem = nome
+            else:
+                raise ValueError(f"Tipo de ficheiro não suportado: {nome}")
+        
+        print(f"Texto extraído de {origem}: {len(texto)} caracteres")
+        return texto, origem
+    except Exception as e:
+        print(f"Erro ao extrair texto de {origem if 'origem' in locals() else file_or_url}: {e}")
+        raise
 
 def extrair_texto_pdf(file):
     texto = ""
     stream = file if isinstance(file, bytes) else file.read()
-    with fitz.open(stream=stream, filetype="pdf") as doc:
-        for page in doc:
-            texto += page.get_text()
+    try:
+        with fitz.open(stream=stream, filetype="pdf") as doc:
+            for page_num, page in enumerate(doc):
+                page_text = page.get_text()
+                if not page_text.strip():
+                    print(f"Aviso: Página {page_num + 1} de {os.path.basename(file.name)} está vazia.")
+                texto += page_text
+    except Exception as e:
+        raise RuntimeError(f"Erro ao processar PDF: {e}")
     return texto
 
 def extrair_texto_docx(file):
@@ -102,10 +112,14 @@ def extrair_texto_txt(file):
     return file.read().decode("utf-8")
 
 def extrair_texto_website(url):
-    resposta = requests.get(url, timeout=10)
-    soup = BeautifulSoup(resposta.content, "html.parser")
-    textos = soup.stripped_strings
-    return "\n".join(textos)
+    try:
+        resposta = requests.get(url, timeout=10)
+        resposta.raise_for_status()  # Levanta erro para códigos HTTP inválidos
+        soup = BeautifulSoup(resposta.content, "html.parser")
+        textos = soup.stripped_strings
+        return "\n".join(textos)
+    except Exception as e:
+        raise RuntimeError(f"Erro ao acessar URL {url}: {e}")
 
 # Processar documento
 def processar_documento(file_or_url):
