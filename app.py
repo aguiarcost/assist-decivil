@@ -3,7 +3,7 @@ import json
 import os
 import openai
 from assistente import gerar_resposta
-from preparar_documentos_streamlit import processar_documento
+from preparar_documentos_streamlit import processar_documento, JSON_LOCK  # Importa o lock global
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 import glob  # Para listar arquivos na pasta
@@ -13,7 +13,6 @@ import threading  # Para processamento em background
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
-JSON_LOCK = threading.Lock()  # Lock para sincronizar acesso ao JSON
 
 # Configuração da página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
@@ -112,12 +111,7 @@ def processar_documentos_pasta(force_reprocess=False):
             try:
                 with open(doc_path, "rb") as f:
                     salvos = processar_documento(f)
-                with JSON_LOCK:  # Lock para salvar
-                    if os.path.exists("base_documents_vector.json"):
-                        with open("base_documents_vector.json", "r", encoding="utf-8-sig") as f:
-                            data = json.load(f)
-                        processados = {os.path.basename(item['origem']) for item in data}
-                    st.success(f"✅ Documento {basename} processado com {salvos} blocos salvos.")
+                st.success(f"✅ Documento {basename} processado com {salvos} blocos salvos.")
             except Exception as e:
                 st.error(f"Erro ao processar {basename}: {e}")
                 print(f"Detalhes do erro: {e}")
@@ -159,13 +153,9 @@ with col1:
         on_change=st.rerun  # Força rerun ao mudar a seleção para atualizar imediatamente
     )
 with col2:
-    pergunta_manual = st.text_input(
-        "Ou escreva a sua pergunta:", 
-        key="manual",
-        on_change=lambda: st.session_state.update({"dropdown": ""})  # Limpa dropdown ao mudar manual
-    )
+    pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
-# Determinar pergunta final (prioriza manual se preenchido)
+# Determinar pergunta final
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
 # Gerar resposta (sempre com RAG nos documentos)
