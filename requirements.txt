@@ -6,3 +6,4 @@ PyPDF2
 PyMuPDF
 beautifulsoup4
 requests
+python-dotenv  # Para .env com API key
