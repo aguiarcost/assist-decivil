@@ -1,16 +1,8 @@
-# Core dependencies
-streamlit>=1.33.0
-openai>=1.0.0
-
-# Embeddings e machine learning
-scikit-learn
-pandas
-
-# Manipulação de documentos
+streamlit>=1.27.0
+openai>=1.10.0
+scikit-learn>=1.2
 python-docx
 PyPDF2
+PyMuPDF
 beautifulsoup4
-pymupdf  # importado como fitz
-
-# Utilitários HTTP
 requests

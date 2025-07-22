@@ -1,42 +1,58 @@
+import openai
 import json
-import numpy as np
-from openai import OpenAI
-import streamlit as st
+import os
+import time
+from dotenv import load_dotenv
 
+# Carregar a chave da API a partir do secrets.toml via variável de ambiente
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Caminhos
 CAMINHO_BASE = "base_conhecimento.json"
-CAMINHO_SAIDA = "base_vectorizada.json"
+CAMINHO_VETORES = "base_vectorizada.json"
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Modelo de embedding recomendado
+EMBEDDING_MODEL = "text-embedding-3-small"
 
-def gerar_embedding(pergunta):
-    response = client.embeddings.create(
-        input=pergunta,
-        model="text-embedding-ada-002"
-    )
-    return response.data[0].embedding
+def gerar_embedding(texto, tentativas=3):
+    for tentativa in range(tentativas):
+        try:
+            response = openai.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=texto
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            print(f"Erro ao gerar embedding para: {texto}\n\n{e}")
+            time.sleep(2)
+    return None
 
 def main():
+    if not os.path.exists(CAMINHO_BASE):
+        print(f"⚠️ Ficheiro {CAMINHO_BASE} não encontrado.")
+        return
+
     with open(CAMINHO_BASE, "r", encoding="utf-8") as f:
-        conhecimento = json.load(f)
+        base_conhecimento = json.load(f)
 
-    vetor_final = []
+    base_vectorizada = []
 
-    for item in conhecimento:
-        pergunta = item["pergunta"]
-        try:
+    for entrada in base_conhecimento:
+        pergunta = entrada.get("pergunta", "")
+        if pergunta:
             embedding = gerar_embedding(pergunta)
-            vetor_final.append({
-                "pergunta": pergunta,
-                "embedding": embedding
-            })
-            print(f"✅ Embedding gerado para: {pergunta}")
-        except Exception as e:
-            print(f"❌ Erro ao gerar embedding para: {pergunta}\n{e}")
+            if embedding:
+                base_vectorizada.append({
+                    "pergunta": pergunta,
+                    "resposta": entrada.get("resposta", ""),
+                    "modelo_email": entrada.get("modelo_email", ""),
+                    "embedding": embedding
+                })
 
-    with open(CAMINHO_SAIDA, "w", encoding="utf-8") as f:
-        json.dump(vetor_final, f, ensure_ascii=False, indent=2)
+    with open(CAMINHO_VETORES, "w", encoding="utf-8") as f:
+        json.dump(base_vectorizada, f, ensure_ascii=False, indent=2)
 
-    print(f"✨ Embeddings guardados em {CAMINHO_SAIDA}")
+    print("✅ Embeddings gerados e guardados em base_vectorizada.json")
 
 if __name__ == "__main__":
     main()
