@@ -195,9 +195,9 @@ with col4:
             st.error(f"Erro: {e}")
 
 # Botão de reprocessamento junto à zona de upload
-if st.button("Forçar Reprocessamento de Documentos"):
-    processar_documentos_pasta(True)
-    st.info("Reprocessamento iniciado em background. Verifique os logs no console para progresso.")
+# if st.button("Forçar Reprocessamento de Documentos"):
+#    processar_documentos_pasta(True)
+ #   st.info("Reprocessamento iniciado em background. Verifique os logs no console para progresso.")
 
 # Atualização manual da base de conhecimento
 st.markdown("---")
