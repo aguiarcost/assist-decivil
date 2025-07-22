@@ -4,6 +4,7 @@ import os
 import openai
 from assistente import gerar_resposta
 from preparar_documentos_streamlit import processar_documento
+from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 
 # Inicialização de variáveis
@@ -114,22 +115,15 @@ pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunt
 # Gerar resposta
 resposta = ""
 if pergunta_final:
-    resposta = gerar_resposta(pergunta_final, use_documents=use_documents)
-    guardar_pergunta_no_historico(pergunta_final)
+    with st.spinner("A pensar..."):
+        resposta = gerar_resposta(pergunta_final, use_documents=use_documents)
+        guardar_pergunta_no_historico(pergunta_final)
 
 # Mostrar resposta
 if resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta, unsafe_allow_html=True)
-
-# Display de histórico
-with st.expander("📜 Histórico de perguntas"):
-    if os.path.exists(CAMINHO_HISTORICO):
-        with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
-            historico = json.load(f)
-            for item in reversed(historico[-10:]):  # Últimas 10
-                st.write(f"{item['timestamp']}: {item['pergunta']}")
 
 # Upload de documentos
 st.markdown("---")
@@ -167,6 +161,7 @@ if novo_json:
                 todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+            gerar_embeddings()  # Atualizar embeddings
             st.success("✅ Base de conhecimento atualizada.")
             st.experimental_rerun()  # Refresh para atualizar dropdown
         else:
@@ -192,6 +187,7 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
             }
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+            gerar_embeddings()  # Atualizar embeddings
             st.success("✅ Pergunta adicionada com sucesso.")
             st.experimental_rerun()  # Refresh para atualizar dropdown
         else:
@@ -200,3 +196,5 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
 # Rodapé com data e autor
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: gray;'>© 2025 AAC</p>", unsafe_allow_html=True)
+```
+
