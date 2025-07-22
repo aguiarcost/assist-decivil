@@ -64,12 +64,48 @@ def guardar_embedding(origem, pagina, texto, embedding):
         print(f"Erro ao salvar JSON: {e}")
         raise
 
-# Extrair texto (sem mudanças, mas adicione log)
+# Extrair texto
 def extrair_texto(file_or_url):
-    # ... (código original)
-    texto, origem = ...  # Supondo o código original
+    if isinstance(file_or_url, str) and file_or_url.startswith("http"):
+        texto = extrair_texto_website(file_or_url)
+        origem = file_or_url
+    else:
+        nome = file_or_url.name.lower() if hasattr(file_or_url, 'name') else os.path.basename(file_or_url).lower()
+        if nome.endswith(".pdf"):
+            texto = extrair_texto_pdf(file_or_url)
+            origem = nome
+        elif nome.endswith(".docx"):
+            texto = extrair_texto_docx(file_or_url)
+            origem = nome
+        elif nome.endswith(".txt"):
+            texto = extrair_texto_txt(file_or_url)
+            origem = nome
+        else:
+            raise ValueError("Tipo de ficheiro não suportado.")
+    
     print(f"Texto extraído de {origem}: {len(texto)} caracteres")
     return texto, origem
+
+def extrair_texto_pdf(file):
+    texto = ""
+    stream = file if isinstance(file, bytes) else file.read()
+    with fitz.open(stream=stream, filetype="pdf") as doc:
+        for page in doc:
+            texto += page.get_text()
+    return texto
+
+def extrair_texto_docx(file):
+    doc = docx.Document(file)
+    return "\n".join([para.text for para in doc.paragraphs])
+
+def extrair_texto_txt(file):
+    return file.read().decode("utf-8")
+
+def extrair_texto_website(url):
+    resposta = requests.get(url, timeout=10)
+    soup = BeautifulSoup(resposta.content, "html.parser")
+    textos = soup.stripped_strings
+    return "\n".join(textos)
 
 # Processar documento
 def processar_documento(file_or_url):
