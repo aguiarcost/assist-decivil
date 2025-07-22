@@ -16,14 +16,14 @@ CAMINHO_DOCUMENTS_VECTOR = "base_documents_vector.json"
 def carregar_dados():
     # Base de conhecimento (Q&A)
     if os.path.exists(CAMINHO_CONHECIMENTO):
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
             knowledge_base = json.load(f)
     else:
         knowledge_base = []
     
     # Embeddings da base de conhecimento
     if os.path.exists(CAMINHO_KNOWLEDGE_VECTOR):
-        with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8") as f:
+        with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
             knowledge_data = json.load(f)
     else:
         knowledge_data = []
@@ -33,7 +33,7 @@ def carregar_dados():
     
     # Documentos (chunks)
     if os.path.exists(CAMINHO_DOCUMENTS_VECTOR):
-        with open(CAMINHO_DOCUMENTS_VECTOR, "r", encoding="utf-8") as f:
+        with open(CAMINHO_DOCUMENTS_VECTOR, "r", encoding="utf-8-sig") as f:
             documents_data = json.load(f)
     else:
         documents_data = []
@@ -96,4 +96,14 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
             if context:
                 # Prompt para GPT
                 prompt = f"Baseado no contexto seguinte, responde à pergunta: {pergunta_utilizador}\n\nContexto:{context}\n\nResposta:"
-                response =
+                response = openai.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300
+                )
+                generated = response.choices[0].message.content.strip()
+                return generated + f"\n\n(Fonte: Documentos processados - {', '.join(sources)})"
+        
+        return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento ou documentos."
+    except Exception as e:
+        return f"❌ Erro ao gerar resposta: {str(e)}"
