@@ -168,6 +168,7 @@ if novo_json:
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             st.success("✅ Base de conhecimento atualizada.")
+            st.experimental_rerun()  # Refresh para atualizar dropdown
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
@@ -192,6 +193,7 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             st.success("✅ Pergunta adicionada com sucesso.")
+            st.experimental_rerun()  # Refresh para atualizar dropdown
         else:
             st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
 
