@@ -3,20 +3,16 @@ import json
 import os
 import openai
 from assistente import gerar_resposta
+import assistente  # Importar módulo completo para atualizar dados
 from preparar_documentos_streamlit import processar_documento
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 import glob  # Para listar arquivos na pasta
-import threading  # Para processamento em background
 
 # Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
-
-# Inicializa base_documents_vector in session_state
-if 'base_documents_vector' not in st.session_state:
-    st.session_state.base_documents_vector = []
 
 # Configuração da página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
@@ -88,15 +84,35 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Novo: Processar documentos da pasta "documentos" automaticamente na inicialização
+# Processamento inicial de documentos (síncrono em vez de thread)
+if openai.api_key:
+    with st.spinner("🗂️ A processar documentos iniciais..."):
+        processar_documentos_pasta()
+        try:
+            # Recarregar embeddings dos documentos para a memória do assistente
+            _, _, _, _, documents_data, documents_embeddings = assistente.carregar_dados()
+            assistente.documents_data = documents_data
+            assistente.documents_embeddings = documents_embeddings
+        except Exception as e:
+            st.error(f"Erro ao carregar vetores dos documentos: {e}")
+
 def processar_documentos_pasta(force_reprocess=False):
     if not os.path.exists(PASTA_DOCUMENTOS):
         os.makedirs(PASTA_DOCUMENTOS)  # Cria a pasta se não existir
     documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))  # Lista todos os arquivos na pasta
     print(f"Documentos encontrados na pasta: {documentos}")
 
-    # Carrega documentos já processados from session_state
-    processados = {os.path.basename(item['origem']) for item in st.session_state.base_documents_vector}
+    # Carregar nomes de documentos já processados previamente (para evitar duplicação)
+    processados = set()
+    if os.path.exists("base_documents_vector.json") and not force_reprocess:
+        try:
+            with open("base_documents_vector.json", "r", encoding="utf-8-sig") as f:
+                data = json.load(f)
+                processados = {os.path.basename(item['origem']) for item in data}
+                print(f"Documentos já processados carregados: {processados}")
+        except json.JSONDecodeError:
+            print("JSON corrompido; reiniciando lista de processados.")
+            processados = set()
 
     for doc_path in documentos:
         basename = os.path.basename(doc_path)
@@ -105,19 +121,14 @@ def processar_documentos_pasta(force_reprocess=False):
             try:
                 with open(doc_path, "rb") as f:
                     salvos = processar_documento(f)
+                # Marcar documento como processado e notificar sucesso
+                processados.add(basename)
                 st.success(f"✅ Documento {basename} processado com {salvos} blocos salvos.")
             except Exception as e:
                 st.error(f"Erro ao processar {basename}: {e}")
                 print(f"Detalhes do erro: {e}")
         else:
             print(f"Ignorando {basename}: já processado.")
-
-# Função para processar em background
-def processar_em_background(force_reprocess=False):
-    processar_documentos_pasta(force_reprocess)
-
-# Chama o processamento em background ao iniciar a app
-threading.Thread(target=processar_em_background).start()
 
 # Interface de pergunta
 base_conhecimento = carregar_base_conhecimento()
@@ -147,9 +158,13 @@ with col1:
         on_change=st.rerun  # Força rerun ao mudar a seleção para atualizar imediatamente
     )
 with col2:
-    pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
+    pergunta_manual = st.text_input(
+        "Ou escreva a sua pergunta:", 
+        key="manual",
+        on_change=lambda: st.session_state.update({"dropdown": ""})  # Limpa dropdown ao mudar manual
+    )
 
-# Determinar pergunta final
+# Determinar pergunta final (prioriza manual se preenchido)
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
 # Gerar resposta (sempre com RAG nos documentos)
@@ -174,6 +189,10 @@ with col3:
     if ficheiro:
         try:
             processar_documento(ficheiro)
+            # Atualizar dados vetoriais na memória
+            _, _, _, _, documents_data, documents_embeddings = assistente.carregar_dados()
+            assistente.documents_data = documents_data
+            assistente.documents_embeddings = documents_embeddings
             st.success("✅ Documento processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
@@ -183,14 +202,24 @@ with col4:
     if st.button("📥 Processar URL") and url:
         try:
             processar_documento(url)
+            _, _, _, _, documents_data, documents_embeddings = assistente.carregar_dados()
+            assistente.documents_data = documents_data
+            assistente.documents_embeddings = documents_embeddings
             st.success("✅ Conteúdo do link processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
 
 # Botão de reprocessamento junto à zona de upload
 if st.button("Forçar Reprocessamento de Documentos"):
-    threading.Thread(target=processar_em_background, args=(True,)).start()
-    st.info("Reprocessamento iniciado em background. Verifique os logs no console para progresso.")
+    with st.spinner("🔄 A reprocessar todos os documentos..."):
+        processar_documentos_pasta(force_reprocess=True)
+        try:
+            _, _, _, _, documents_data, documents_embeddings = assistente.carregar_dados()
+            assistente.documents_data = documents_data
+            assistente.documents_embeddings = documents_embeddings
+        except Exception as e:
+            st.error(f"Erro ao recarregar dados dos documentos: {e}")
+    st.success("✅ Reprocessamento concluído!")
 
 # Atualização manual da base de conhecimento
 st.markdown("---")
@@ -206,7 +235,7 @@ if novo_json:
                 todas[nova["pergunta"]] = nova
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            gerar_embeddings()  # Atualizar embeddings
+            gerar_embeddings()  # Atualizar embeddings da base de conhecimento
             st.success("✅ Base de conhecimento atualizada.")
             st.experimental_rerun()  # Refresh para atualizar dropdown
         else:
@@ -232,7 +261,7 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
             }
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            gerar_embeddings()  # Atualizar embeddings
+            gerar_embeddings()  # Atualizar embeddings da base de conhecimento
             st.success("✅ Pergunta adicionada com sucesso.")
             st.experimental_rerun()  # Refresh para atualizar dropdown
         else:
