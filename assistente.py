@@ -20,7 +20,7 @@ def carregar_dados():
             with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
                 content = f.read().strip()
                 if content:
-                    knowledge_base = json.load(content)
+                    knowledge_base = json.loads(content)
                 else:
                     knowledge_base = []
         except json.JSONDecodeError:
@@ -35,7 +35,7 @@ def carregar_dados():
             with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
                 content = f.read().strip()
                 if content:
-                    knowledge_data = json.load(content)
+                    knowledge_data = json.loads(content)
                 else:
                     knowledge_data = []
         except json.JSONDecodeError:
@@ -53,7 +53,7 @@ def carregar_dados():
             with open(CAMINHO_DOCUMENTS_VECTOR, "r", encoding="utf-8-sig") as f:
                 content = f.read().strip()
                 if content:
-                    documents_data = json.load(content)
+                    documents_data = json.loads(content)
                 else:
                     documents_data = []
         except json.JSONDecodeError:
