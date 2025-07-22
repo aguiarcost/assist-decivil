@@ -17,7 +17,7 @@ CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
 MESSAGE_QUEUE = Queue()  # Fila para mensagens de processamento
 
-# Inicializa base_documents_vector em session_state
+# Inicializa base_documents_vector em session_state no topo
 if 'base_documents_vector' not in st.session_state:
     st.session_state.base_documents_vector = []
 
