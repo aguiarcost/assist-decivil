@@ -50,11 +50,22 @@ def guardar_embedding(origem, pagina, texto, embedding):
         try:
             if os.path.exists(CAMINHO_BASE):
                 with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:
-                    base = json.load(f)
+                    try:
+                        base = json.load(f)
+                    except json.JSONDecodeError as e:
+                        print(f"Erro ao carregar JSON: {e}. Tentando reparar...")
+                        # Tenta reparar lendo até o erro e reconstruindo
+                        with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_raw:
+                            content = f_raw.read()
+                            try:
+                                base = json.loads("[" + content.split("[", 1)[1].rsplit("]", 1)[0].strip() + "]")
+                            except:
+                                base = []  # Se não puder reparar, reinicia
+                        print("Reparado ou reiniciado como vazio.")
             else:
                 base = []
-        except json.JSONDecodeError:
-            print("Arquivo JSON corrompido; reiniciando como vazio.")
+        except Exception as e:
+            print(f"Erro ao acessar JSON: {e}. Reiniciando como vazio.")
             base = []
 
         base.append({
@@ -67,6 +78,13 @@ def guardar_embedding(origem, pagina, texto, embedding):
         try:
             with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
                 json.dump(base, f, ensure_ascii=False, indent=2)
+            # Verifica se a escrita foi bem-sucedida
+            with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_check:
+                check_data = json.load(f_check)
+                if not check_data or len(check_data) != len(base):
+                    print("Erro: Dados salvos não correspondem ao esperado. Tentando corrigir...")
+                    with open(CAMINHO_BASE, "w", encoding="utf-8") as f_fix:
+                        json.dump(base, f_fix, ensure_ascii=False, indent=2)
             print(f"✅ Bloco salvo: {origem}, página {pagina}")
         except Exception as e:
             print(f"Erro ao salvar JSON: {e}")
