@@ -13,6 +13,7 @@ import threading  # Para processamento em background
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
+JSON_LOCK = threading.Lock()  # Lock para sincronizar acesso ao JSON
 
 # Configuração da página
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
@@ -55,7 +56,7 @@ st.markdown("""
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
                 return json.load(f)
         except json.JSONDecodeError:
             return []
@@ -91,17 +92,18 @@ def processar_documentos_pasta(force_reprocess=False):
     documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))  # Lista todos os arquivos na pasta
     print(f"Documentos encontrados na pasta: {documentos}")
 
-    # Carrega documentos já processados do JSON
-    processados = set()  # Usa set para eficiência
-    if os.path.exists("base_documents_vector.json") and not force_reprocess:
-        try:
-            with open("base_documents_vector.json", "r", encoding="utf-8-sig") as f:
-                data = json.load(f)
-                processados = {os.path.basename(item['origem']) for item in data}  # Usa basename para consistência
-                print(f"Documentos já processados carregados: {processados}")
-        except json.JSONDecodeError:
-            print("JSON corrompido; reiniciando lista de processados.")
-            pass
+    # Carrega documentos já processados do JSON com lock
+    processados = set()
+    with JSON_LOCK:
+        if os.path.exists("base_documents_vector.json") and not force_reprocess:
+            try:
+                with open("base_documents_vector.json", "r", encoding="utf-8-sig") as f:
+                    data = json.load(f)
+                    processados = {os.path.basename(item['origem']) for item in data}
+                    print(f"Documentos já processados carregados: {processados}")
+            except json.JSONDecodeError:
+                print("JSON corrompido; reiniciando lista de processados.")
+                pass
 
     for doc_path in documentos:
         basename = os.path.basename(doc_path)
@@ -110,7 +112,12 @@ def processar_documentos_pasta(force_reprocess=False):
             try:
                 with open(doc_path, "rb") as f:
                     salvos = processar_documento(f)
-                st.success(f"✅ Documento {basename} processado com {salvos} blocos salvos.")
+                with JSON_LOCK:  # Lock para salvar
+                    if os.path.exists("base_documents_vector.json"):
+                        with open("base_documents_vector.json", "r", encoding="utf-8-sig") as f:
+                            data = json.load(f)
+                        processados = {os.path.basename(item['origem']) for item in data}
+                    st.success(f"✅ Documento {basename} processado com {salvos} blocos salvos.")
             except Exception as e:
                 st.error(f"Erro ao processar {basename}: {e}")
                 print(f"Detalhes do erro: {e}")
