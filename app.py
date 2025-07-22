@@ -83,27 +83,36 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Novo: Processar documentos da pasta "documentos" automaticamente na inicialização
+#Processar documentos
 def processar_documentos_pasta():
     if not os.path.exists(PASTA_DOCUMENTOS):
-        os.makedirs(PASTA_DOCUMENTOS)  # Cria a pasta se não existir
-    documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))  # Lista todos os arquivos na pasta
-    processados = []  # Para evitar reprocessar se já feito
+        os.makedirs(PASTA_DOCUMENTOS)
+    documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))
+    print(f"Documentos encontrados na pasta: {documentos}")
+
+    processados = []
     if os.path.exists("base_documents_vector.json"):
         with open("base_documents_vector.json", "r", encoding="utf-8") as f:
             try:
                 data = json.load(f)
-                processados = [item['origem'] for item in data]
+                processados = list(set(item['origem'] for item in data))  # Use set para únicos
             except json.JSONDecodeError:
+                print("JSON corrompido; ignorando processados anteriores.")
                 pass
+
     for doc_path in documentos:
-        if doc_path not in processados:
+        basename = os.path.basename(doc_path)
+        if basename not in processados:
             try:
                 with open(doc_path, "rb") as f:
-                    processar_documento(f)  # Processa o arquivo como file_uploader faria
-                st.success(f"✅ Documento {os.path.basename(doc_path)} processado automaticamente.")
+                    salvos = processar_documento(f)  # Agora retorna número de blocos salvos
+                if salvos > 0:
+                    st.success(f"✅ Documento {basename} processado e salvo com {salvos} blocos.")
+                else:
+                    st.warning(f"⚠️ Documento {basename} processado, mas sem blocos salvos (texto vazio?).")
             except Exception as e:
-                st.error(f"Erro ao processar {os.path.basename(doc_path)}: {e}")
+                st.error(f"Erro ao processar {basename}: {e}")
+                print(f"Detalhes do erro: {e}")
 
 # Chama a função de processamento automático ao iniciar a app
 if not st.session_state.get("documentos_processados", False):
