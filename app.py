@@ -88,27 +88,35 @@ def processar_documentos_pasta():
     if not os.path.exists(PASTA_DOCUMENTOS):
         os.makedirs(PASTA_DOCUMENTOS)  # Cria a pasta se não existir
     documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))  # Lista todos os arquivos na pasta
-    processados = []  # Para evitar reprocessar se já feito
+    print(f"Documentos encontrados na pasta: {documentos}")
+
+    # Carrega documentos já processados do JSON
+    processados = set()  # Usa set para eficiência
     if os.path.exists("base_documents_vector.json"):
-        with open("base_documents_vector.json", "r", encoding="utf-8") as f:
-            try:
+        try:
+            with open("base_documents_vector.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
-                processados = [item['origem'] for item in data]
-            except json.JSONDecodeError:
-                pass
+                processados = {item['origem'] for item in data}
+        except json.JSONDecodeError:
+            print("JSON corrompido; reiniciando lista de processados.")
+            pass
+
     for doc_path in documentos:
+        basename = os.path.basename(doc_path)
         if doc_path not in processados:
+            print(f"Processando novo documento: {basename}")
             try:
                 with open(doc_path, "rb") as f:
-                    processar_documento(f)  # Processa o arquivo como file_uploader faria
-                st.success(f"✅ Documento {os.path.basename(doc_path)} processado automaticamente.")
+                    processar_documento(f)  # Processa o arquivo
+                st.success(f"✅ Documento {basename} processado e salvo.")
             except Exception as e:
-                st.error(f"Erro ao processar {os.path.basename(doc_path)}: {e}")
+                st.error(f"Erro ao processar {basename}: {e}")
+                print(f"Detalhes do erro: {e}")
+        else:
+            print(f"Ignorando {basename}: já processado.")
 
 # Chama a função de processamento automático ao iniciar a app
-if not st.session_state.get("documentos_processados", False):
-    processar_documentos_pasta()
-    st.session_state["documentos_processados"] = True
+processar_documentos_pasta()  # Remove a dependência de st.session_state para usar JSON como referência
 
 # Interface de pergunta
 base_conhecimento = carregar_base_conhecimento()
