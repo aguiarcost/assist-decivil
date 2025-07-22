@@ -97,7 +97,7 @@ def processar_documentos_pasta(force_reprocess=False):
         try:
             with open("base_documents_vector.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
-                processados = {item['origem'] for item in data}
+                processados = {os.path.basename(item['origem']) for item in data}  # Usa basename para consistência
                 print(f"Documentos já processados carregados: {processados}")
         except json.JSONDecodeError:
             print("JSON corrompido; reiniciando lista de processados.")
@@ -195,6 +195,7 @@ with col4:
 # Botão de reprocessamento junto à zona de upload
 if st.button("Forçar Reprocessamento de Documentos"):
     threading.Thread(target=processar_em_background, args=(True,)).start()
+    st.info("Reprocessamento iniciado em background. Verifique os logs no console para progresso.")
 
 # Atualização manual da base de conhecimento
 st.markdown("---")
