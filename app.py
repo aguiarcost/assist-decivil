@@ -1,4 +1,3 @@
-
 import streamlit as st
 import json
 import os
@@ -136,17 +135,14 @@ with col1:
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
-# Toggle para RAG
-use_documents = st.checkbox("Buscar também em documentos adicionados (RAG)", value=True)
-
 # Determinar pergunta final
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
-# Gerar resposta
+# Gerar resposta (sempre com RAG nos documentos)
 resposta = ""
 if pergunta_final:
     with st.spinner("A pensar..."):
-        resposta = gerar_resposta(pergunta_final, use_documents=use_documents)
+        resposta = gerar_resposta(pergunta_final, use_documents=True)  # Forçado para True
         guardar_pergunta_no_historico(pergunta_final)
 
 # Mostrar resposta
