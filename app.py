@@ -95,7 +95,6 @@ def processar_documentos_pasta(force_reprocess=False):
     print(f"Documentos encontrados na pasta: {documentos}")
 
     # Carrega documentos já processados do JSON com lock
-    processados = set()
     with JSON_LOCK:
         if os.path.exists("base_documents_vector.json") and not force_reprocess:
             try:
@@ -105,7 +104,9 @@ def processar_documentos_pasta(force_reprocess=False):
                     print(f"Documentos já processados carregados: {processados}")
             except json.JSONDecodeError:
                 print("JSON corrompido; reiniciando lista de processados.")
-                pass
+                processados = set()
+        else:
+            processados = set()
 
     for doc_path in documentos:
         basename = os.path.basename(doc_path)
