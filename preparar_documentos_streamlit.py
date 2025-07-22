@@ -49,19 +49,26 @@ def guardar_embedding(origem, pagina, texto, embedding):
     with JSON_LOCK:  # Lock para evitar corrupção
         try:
             if os.path.exists(CAMINHO_BASE):
-                with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:
-                    try:
+                try:
+                    with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:
                         base = json.load(f)
-                    except json.JSONDecodeError as e:
-                        print(f"Erro ao carregar JSON: {e}. Tentando reparar...")
-                        # Tenta reparar lendo até o erro e reconstruindo
-                        with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_raw:
-                            content = f_raw.read()
-                            try:
-                                base = json.loads("[" + content.split("[", 1)[1].rsplit("]", 1)[0].strip() + "]")
-                            except:
-                                base = []  # Se não puder reparar, reinicia
-                        print("Reparado ou reiniciado como vazio.")
+                except json.JSONDecodeError as e:
+                    print(f"Erro ao carregar JSON: {e}. Tentando reparar...")
+                    with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_raw:
+                        content = f_raw.read()
+                        try:
+                            # Tenta extrair dados válidos até o erro
+                            valid_json = []
+                            for line in content.splitlines():
+                                try:
+                                    valid_json.extend(json.loads(line))
+                                except json.JSONDecodeError:
+                                    continue
+                            base = valid_json if valid_json else []
+                            print("Dados válidos extraídos com sucesso.")
+                        except:
+                            base = []  # Fallback para vazio se não puder reparar
+                            print("Reparado ou reiniciado como vazio.")
             else:
                 base = []
         except Exception as e:
@@ -78,11 +85,11 @@ def guardar_embedding(origem, pagina, texto, embedding):
         try:
             with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
                 json.dump(base, f, ensure_ascii=False, indent=2)
-            # Verifica se a escrita foi bem-sucedida
+            # Validação pós-escrita
             with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_check:
                 check_data = json.load(f_check)
-                if not check_data or len(check_data) != len(base):
-                    print("Erro: Dados salvos não correspondem ao esperado. Tentando corrigir...")
+                if len(check_data) != len(base):
+                    print(f"Erro: Número de entradas esperadas ({len(base)}) não corresponde ao salvo ({len(check_data)}). Tentando corrigir...")
                     with open(CAMINHO_BASE, "w", encoding="utf-8") as f_fix:
                         json.dump(base, f_fix, ensure_ascii=False, indent=2)
             print(f"✅ Bloco salvo: {origem}, página {pagina}")
