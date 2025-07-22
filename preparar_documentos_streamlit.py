@@ -19,8 +19,8 @@ if not os.path.exists(CAMINHO_BASE):
         json.dump([], f, ensure_ascii=False, indent=2)
     print(f"✅ Arquivo {CAMINHO_BASE} criado vazio.")
 
-# Gerar embedding com reintentos
-def gerar_embedding(texto, tentativas=5):  # Aumentei para 5 tentativas
+# Gerar embedding com reintentos e timeout
+def gerar_embedding(texto, tentativas=5):
     if not openai.api_key:
         raise RuntimeError("Chave API OpenAI não definida.")
     for tentativa in range(tentativas):
@@ -28,9 +28,14 @@ def gerar_embedding(texto, tentativas=5):  # Aumentei para 5 tentativas
             print(f"Tentativa {tentativa + 1} de gerar embedding para bloco de texto (tamanho: {len(texto)} chars)...")
             response = openai.embeddings.create(
                 input=texto,
-                model="text-embedding-3-small"
+                model="text-embedding-3-small",
+                timeout=30  # Timeout de 30 segundos por chamada
             )
             return response.data[0].embedding
+        except openai.APITimeoutError:
+            print(f"Timeout na tentativa {tentativa + 1}.")
+            if tentativa < tentativas - 1:
+                time.sleep(5)  # Espera mais longa após timeout
         except Exception as e:
             print(f"Erro na tentativa {tentativa + 1}: {e}")
             if tentativa < tentativas - 1:
@@ -98,7 +103,7 @@ def extrair_texto_pdf(file):
             for page_num, page in enumerate(doc):
                 page_text = page.get_text()
                 if not page_text.strip():
-                    print(f"Aviso: Página {page_num + 1} de {os.path.basename(file.name)} está vazia.")
+                    print(f"Aviso: Página {page_num + 1} de {os.path.basename(file.name if hasattr(file, 'name') else file)} está vazia.")
                 texto += page_text
     except Exception as e:
         raise RuntimeError(f"Erro ao processar PDF: {e}")
