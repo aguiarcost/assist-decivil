@@ -94,16 +94,6 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
                     sources.append(f"{item['origem']}, página {item['pagina']}")
             
             if context:
-                # Prompt melhorado para exploração em linguagem natural
-                prompt = f"Analisa o contexto seguinte dos documentos em linguagem natural, considerando todos os detalhes relevantes, e responde à pergunta '{pergunta_utilizador}' de forma completa e precisa:\n\nContexto:{context}\n\nResposta:"
-                response = openai.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=500  # Aumentei para respostas mais detalhadas
-                )
-                generated = response.choices[0].message.content.strip()
-                return generated + f"\n\n(Fonte: Documentos processados - {', '.join(sources)})"
-        
-        return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento ou documentos."
-    except Exception as e:
-        return f"❌ Erro ao gerar resposta: {str(e)}"
+                # Prompt para GPT
+                prompt = f"Baseado no contexto seguinte, responde à pergunta: {pergunta_utilizador}\n\nContexto:{context}\n\nResposta:"
+                response =
