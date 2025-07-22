@@ -152,8 +152,7 @@ with col1:
     pergunta_dropdown = st.selectbox(
         "Escolha uma pergunta frequente:", 
         [""] + perguntas_existentes, 
-        key="dropdown",
-        on_change=st.rerun  # Força rerun ao mudar a seleção para atualizar imediatamente
+        key="dropdown"
     )
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
@@ -250,6 +249,18 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
 # Rodapé com copyright
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
+
+# Placeholder para mostrar mensagens de processamento no rodapé
+processing_placeholder = st.empty()
+with processing_placeholder.container():
+    if not st.session_state.documents_processed:
+        if st.button("Iniciar Processamento em Background"):
+            if not st.session_state.documents_processed:
+                threading.Thread(target=processar_em_background).start()
+                st.session_state.documents_processed = True
+                st.info("Processamento em background iniciado. Verifique os logs para progresso.")
+    else:
+        st.info("Processamento de documentos em background em andamento...")
 
 # Thread para atualizar mensagens da fila na UI
 def update_processing_messages():
