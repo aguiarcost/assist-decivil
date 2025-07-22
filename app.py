@@ -262,14 +262,3 @@ with processing_placeholder.container():
         st.info("Processamento de documentos em background em andamento...")
 
 # Thread para atualizar mensagens da fila na UI
-def update_processing_messages():
-    while True:
-        if not MESSAGE_QUEUE.empty():
-            msg_type, msg = MESSAGE_QUEUE.get()
-            if msg_type == "success":
-                st.success(msg)
-            elif msg_type == "error":
-                st.error(msg)
-        time.sleep(1)  # Verifica a fila a cada segundo
-
-threading.Thread(target=update_processing_messages, daemon=True).start()
