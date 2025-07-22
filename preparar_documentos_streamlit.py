@@ -2,15 +2,14 @@ import fitz  # PyMuPDF para PDF
 import docx
 import os
 import json
-import numpy as np
 import openai
 import requests
 from bs4 import BeautifulSoup
 
-# Caminho da base vetorizada
-CAMINHO_BASE = "base_vectorizada.json"
+# Caminho da base vetorizada para documentos
+CAMINHO_BASE = "base_documents_vector.json"
 
-# Obter chave da API (de ambiente ou via Streamlit)
+# Obter chave da API
 openai.api_key = os.getenv("OPENAI_API_KEY", "")
 
 # Gerar embedding
