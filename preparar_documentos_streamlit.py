@@ -6,11 +6,13 @@ import openai
 import requests
 from bs4 import BeautifulSoup
 import time  # Para sleep em reintentos
+import threading  # Para lock
 
 # Caminho da base vetorizada para documentos
 CAMINHO_BASE = "base_documents_vector.json"
+JSON_LOCK = threading.Lock()  # Lock para sincronizar acesso ao JSON
 
-# Obter chave da API (pode ser definida via st.secrets ou variável de ambiente)
+# Obter chave da API
 openai.api_key = os.getenv("OPENAI_API_KEY", "")
 
 # Inicializar o arquivo JSON se não existir
@@ -26,7 +28,7 @@ def gerar_embedding(texto, tentativas=5):
     for tentativa in range(tentativas):
         try:
             print(f"Tentativa {tentativa + 1} de gerar embedding para bloco de texto (tamanho: {len(texto)} chars)...")
-            response = openai.Embedding.create(
+            response = openai.embeddings.create(
                 input=texto,
                 model="text-embedding-3-small",
                 timeout=30  # Timeout de 30 segundos por chamada
@@ -44,30 +46,53 @@ def gerar_embedding(texto, tentativas=5):
 
 # Guardar bloco com embedding
 def guardar_embedding(origem, pagina, texto, embedding):
-    try:
-        if os.path.exists(CAMINHO_BASE):
-            with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:
-                base = json.load(f)
-        else:
-            base = []
-    except json.JSONDecodeError:
-        print("Arquivo JSON corrompido; reiniciando como vazio.")
-        base = []
+    with JSON_LOCK:  # Lock para evitar corrupção
+        try:
+            if os.path.exists(CAMINHO_BASE):
+                with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f:
+                    base = json.load(f)
+            else:
+                base = []
+        except json.JSONDecodeError as e:
+            print(f"Erro ao carregar JSON: {e}. Tentando reparar...")
+            with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_raw:
+                content = f_raw.read()
+                try:
+                    # Tenta extrair dados válidos até o erro
+                    valid_json = []
+                    for line in content.splitlines():
+                        if line.strip().startswith('{'):
+                            try:
+                                valid_json.append(json.loads(line.strip(',')))
+                            except json.JSONDecodeError:
+                                continue
+                    base = valid_json if valid_json else []
+                    print("Dados válidos extraídos com sucesso.")
+                except:
+                    base = []  # Fallback para vazio se não puder reparar
+                    print("Reparado ou reiniciado como vazio.")
 
-    base.append({
-        "origem": origem,
-        "pagina": pagina,
-        "texto": texto,
-        "embedding": embedding
-    })
+        base.append({
+            "origem": origem,
+            "pagina": pagina,
+            "texto": texto,
+            "embedding": embedding
+        })
 
-    try:
-        with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
-            json.dump(base, f, ensure_ascii=False, indent=2)
-        print(f"✅ Bloco salvo: {origem}, página {pagina}")
-    except Exception as e:
-        print(f"Erro ao salvar JSON: {e}")
-        raise
+        try:
+            with open(CAMINHO_BASE, "w", encoding="utf-8") as f:
+                json.dump(base, f, ensure_ascii=False, indent=2)
+            # Validação pós-escrita
+            with open(CAMINHO_BASE, "r", encoding="utf-8-sig") as f_check:
+                check_data = json.load(f_check)
+                if len(check_data) != len(base):
+                    print(f"Erro: Número de entradas esperadas ({len(base)}) não corresponde ao salvo ({len(check_data)}). Tentando corrigir...")
+                    with open(CAMINHO_BASE, "w", encoding="utf-8") as f_fix:
+                        json.dump(base, f_fix, ensure_ascii=False, indent=2)
+            print(f"✅ Bloco salvo: {origem}, página {pagina}")
+        except Exception as e:
+            print(f"Erro ao salvar JSON: {e}")
+            raise
 
 # Extrair texto com limpeza de encoding
 def extrair_texto(file_or_url):
@@ -88,13 +113,13 @@ def extrair_texto(file_or_url):
                 origem = nome
             else:
                 raise ValueError(f"Tipo de ficheiro não suportado: {nome}")
-
-        # Limpeza de encoding: substitui bytes inválidos por caractere substituto
+        
+        # Limpeza de encoding: Substitui bytes inválidos para UTF-8
         texto = texto.encode('utf-8', 'replace').decode('utf-8')
         print(f"Texto extraído e limpo de {origem}: {len(texto)} caracteres")
         return texto, origem
     except Exception as e:
-        print(f"Erro ao extrair texto de {file_or_url if isinstance(file_or_url, str) else getattr(file_or_url, 'name', 'desconhecido')}: {e}")
+        print(f"Erro ao extrair texto de {origem if 'origem' in locals() else file_or_url}: {e}")
         raise
 
 def extrair_texto_pdf(file):
@@ -116,7 +141,7 @@ def extrair_texto_docx(file):
     return "\n".join([para.text for para in doc.paragraphs])
 
 def extrair_texto_txt(file):
-    return file.read().decode("utf-8", errors='replace')
+    return file.read().decode("utf-8", errors='replace')  # Adiciona errors='replace' para TXT também
 
 def extrair_texto_website(url):
     try:
@@ -128,7 +153,7 @@ def extrair_texto_website(url):
     except Exception as e:
         raise RuntimeError(f"Erro ao acessar URL {url}: {e}")
 
-# Processar documento (extrair texto, gerar embeddings e salvar)
+# Processar documento
 def processar_documento(file_or_url):
     texto, origem = extrair_texto(file_or_url)
     blocos = [texto[i:i+1000] for i in range(0, len(texto), 1000)]
@@ -149,4 +174,4 @@ def processar_documento(file_or_url):
 
     if salvos == 0:
         raise RuntimeError(f"Nenhum bloco salvo para {origem}. Verifique texto extraído.")
-    return salvos  # Retorna o número de blocos salvos para verificação
+    return salvos  # Retorne o número de salvos para verificação em app.py
