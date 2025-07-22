@@ -44,6 +44,7 @@ def main():
                 base_vectorizada.append({
                     "pergunta": pergunta,
                     "resposta": entrada.get("resposta", ""),
+                    "email": entrada.get("email", ""),
                     "modelo_email": entrada.get("modelo_email", ""),
                     "embedding": embedding
                 })
