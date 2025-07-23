@@ -7,7 +7,7 @@ from preparar_documentos_streamlit import processar_documento
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 import glob  # Para listar arquivos na pasta
-import threading  # Para processamento em background
+# Para processamento em background
 from queue import Queue  # Para fila de mensagens
 import time  # Para o loop de atualização
 
@@ -121,9 +121,6 @@ def processar_documentos_pasta(force_reprocess=False):
             print(f"Ignorando {basename}: já processado.")
 
 # Função para processar em background
-def processar_em_background(force_reprocess=False):
-    processar_documentos_pasta(force_reprocess)
-
 # Chama o processamento em background apenas após interação do usuário
 if 'documents_processed' not in st.session_state:
     st.session_state.documents_processed = False
@@ -197,7 +194,7 @@ with col4:
 
 # Botão de reprocessamento junto à zona de upload
 if st.button("Forçar Reprocessamento de Documentos"):
-    threading.Thread(target=processar_em_background, args=(True,)).start()
+    
     st.info("Reprocessamento iniciado em background. Verifique os logs no console para progresso.")
 
 # Atualização manual da base de conhecimento
@@ -256,7 +253,7 @@ with processing_placeholder.container():
     if not st.session_state.documents_processed:
         if st.button("Iniciar Processamento em Background"):
             if not st.session_state.documents_processed:
-                threading.Thread(target=processar_em_background).start()
+                
                 st.session_state.documents_processed = True
                 st.info("Processamento em background iniciado. Verifique os logs para progresso.")
     else:
