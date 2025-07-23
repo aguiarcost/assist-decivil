@@ -15,7 +15,7 @@ import time  # Para o loop de atualização
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"  # Pasta com documentos a processar automaticamente
-MESSAGE_QUEUE = Queue()  # Fila para mensagens de processamento
+  # Fila para mensagens de processamento
 
 # Inicializa base_documents_vector em session_state no topo com fallback
 if 'base_documents_vector' not in st.session_state:
@@ -113,9 +113,9 @@ def processar_documentos_pasta(force_reprocess=False):
             try:
                 with open(doc_path, "rb") as f:
                     salvos = processar_documento(f)
-                MESSAGE_QUEUE.put(("success", f"✅ Documento {basename} processado com {salvos} blocos salvos."))
+                st.success(("success", f"✅ Documento {basename} processado com {salvos} blocos salvos."))
             except Exception as e:
-                MESSAGE_QUEUE.put(("error", f"Erro ao processar {basename}: {e}"))
+                st.success(("error", f"Erro ao processar {basename}: {e}"))
                 print(f"Detalhes do erro: {e}")
         else:
             print(f"Ignorando {basename}: já processado.")
@@ -260,14 +260,3 @@ with processing_placeholder.container():
         st.info("Processamento de documentos em background em andamento...")
 
 # Thread para atualizar mensagens da fila na UI
-def update_processing_messages():
-    while True:
-        if not MESSAGE_QUEUE.empty():
-            msg_type, msg = MESSAGE_QUEUE.get()
-            if msg_type == "success":
-                st.success(msg)
-            elif msg_type == "error":
-                st.error(msg)
-        time.sleep(1)  # Verifica a fila a cada segundo
-
-threading.Thread(target=update_processing_messages, daemon=True).start()
