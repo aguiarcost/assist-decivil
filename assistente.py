@@ -7,7 +7,7 @@ import numpy as np
 # Carregar chave API
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Caminhos unificados
+# Caminhos
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
 
@@ -51,6 +51,7 @@ def carregar_dados():
 
     return knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings
 
+# Inicializar
 knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings = carregar_dados()
 
 # Gerar embedding
@@ -61,6 +62,7 @@ def get_embedding(text):
 # Gerar resposta
 def gerar_resposta(pergunta_utilizador, threshold=0.8):
     try:
+        # Verificar correspondência exata
         for item in knowledge_base:
             if item["pergunta"].strip().lower() == pergunta_utilizador.strip().lower():
                 resposta = item["resposta"]
@@ -68,25 +70,29 @@ def gerar_resposta(pergunta_utilizador, threshold=0.8):
                     resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
                 modelo = item.get("modelo_email", "")
                 if modelo.strip():
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```
+{modelo}
+```"
                 return resposta + "\n\n(Fonte: Base de conhecimento, correspondência exata)"
 
-        # Se não houver correspondência exata, usar similaridade
+        # Similaridade se não houver correspondência exata
         embedding_utilizador = get_embedding(pergunta_utilizador)
 
         if len(knowledge_embeddings) > 0:
-            sims_knowledge = cosine_similarity(embedding_utilizador, knowledge_embeddings)[0]
-            max_sim_k = np.max(sims_knowledge)
-            if max_sim_k >= threshold:
-                idx = int(np.argmax(sims_knowledge))
+            sims = cosine_similarity(embedding_utilizador, knowledge_embeddings)[0]
+            max_sim = np.max(sims)
+            if max_sim >= threshold:
+                idx = int(np.argmax(sims))
                 item = knowledge_data[idx]
                 resposta = item["resposta"]
                 if item.get("email"):
                     resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
                 modelo = item.get("modelo_email", "")
                 if modelo.strip():
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
-                return resposta + f"\n\n(Fonte: Base de conhecimento, similaridade: {max_sim_k:.2f})"
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```
+{modelo}
+```"
+                return resposta + f"\n\n(Fonte: Base de conhecimento, similaridade: {max_sim:.2f})"
 
         return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento."
 
