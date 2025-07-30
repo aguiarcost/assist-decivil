@@ -12,6 +12,7 @@ CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
 
 # Carregar dados
+
 def carregar_dados():
     # Base de conhecimento (Q&A)
     if os.path.exists(CAMINHO_CONHECIMENTO):
@@ -43,7 +44,9 @@ def carregar_dados():
     else:
         knowledge_data = []
 
-    knowledge_embeddings = np.array([item["embedding"] for item in knowledge_data]) if knowledge_data else np.array([])
+    knowledge_embeddings = (
+        np.array([item["embedding"] for item in knowledge_data]) if knowledge_data else np.array([])
+    )
     knowledge_perguntas = [item["pergunta"] for item in knowledge_data]
 
     return knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings
@@ -58,9 +61,34 @@ def get_embedding(text):
 # Gerar resposta
 def gerar_resposta(pergunta_utilizador, threshold=0.8):
     try:
-        # Verificar correspondência exata na base de conhecimento
         for item in knowledge_base:
             if item["pergunta"].strip().lower() == pergunta_utilizador.strip().lower():
                 resposta = item["resposta"]
                 if item.get("email"):
-                    resposta += f"\n\n
+                    resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
+                modelo = item.get("modelo_email", "")
+                if modelo.strip():
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+                return resposta + "\n\n(Fonte: Base de conhecimento, correspondência exata)"
+
+        # Se não houver correspondência exata, usar similaridade
+        embedding_utilizador = get_embedding(pergunta_utilizador)
+
+        if len(knowledge_embeddings) > 0:
+            sims_knowledge = cosine_similarity(embedding_utilizador, knowledge_embeddings)[0]
+            max_sim_k = np.max(sims_knowledge)
+            if max_sim_k >= threshold:
+                idx = int(np.argmax(sims_knowledge))
+                item = knowledge_data[idx]
+                resposta = item["resposta"]
+                if item.get("email"):
+                    resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
+                modelo = item.get("modelo_email", "")
+                if modelo.strip():
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+                return resposta + f"\n\n(Fonte: Base de conhecimento, similaridade: {max_sim_k:.2f})"
+
+        return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento."
+
+    except Exception as e:
+        return f"❌ Erro ao gerar resposta: {str(e)}"
