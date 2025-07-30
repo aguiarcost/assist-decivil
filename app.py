@@ -8,19 +8,24 @@ from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 import glob
 
+# Inicialização
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"
 
 if 'base_documents_vector' not in st.session_state:
     st.session_state.base_documents_vector = []
+if 'documents_processed' not in st.session_state:
+    st.session_state.documents_processed = False
 
+# Configuração visual
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
-
 st.markdown("""
     <style>
     .stApp { background-color: #fff3e0; }
-    .titulo-container { display: flex; align-items: center; gap: 10px; margin-top: 10px; margin-bottom: 30px; }
+    .titulo-container {
+        display: flex; align-items: center; gap: 10px; margin-top: 10px; margin-bottom: 30px;
+    }
     .titulo-container img { width: 70px; height: auto; }
     .titulo-container h1 { color: #ef6c00; font-size: 2em; margin: 0; }
     .footer { text-align: center; color: gray; margin-top: 50px; }
@@ -34,6 +39,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# Funções
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
@@ -45,17 +51,34 @@ def carregar_base_conhecimento():
 
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
-    historico = []
     if os.path.exists(CAMINHO_HISTORICO):
         try:
             with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
                 historico = json.load(f)
         except json.JSONDecodeError:
-            pass
+            historico = []
+    else:
+        historico = []
     historico.append(registo)
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
+def processar_documentos_pasta():
+    if not os.path.exists(PASTA_DOCUMENTOS):
+        os.makedirs(PASTA_DOCUMENTOS)
+    documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))
+    processados = {os.path.basename(item['origem']) for item in st.session_state.base_documents_vector}
+    for doc_path in documentos:
+        basename = os.path.basename(doc_path)
+        if basename not in processados:
+            try:
+                with open(doc_path, "rb") as f:
+                    salvos = processar_documento(f)
+                st.success(f"✅ Documento {basename} processado com {salvos} blocos.")
+            except Exception as e:
+                st.error(f"Erro ao processar {basename}: {e}")
+
+# Chave API
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -63,7 +86,12 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Interface de pergunta
+# Processamento automático
+if not st.session_state.documents_processed:
+    processar_documentos_pasta()
+    st.session_state.documents_processed = True
+
+# Perguntas existentes
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 if os.path.exists(CAMINHO_HISTORICO):
@@ -82,14 +110,20 @@ perguntas_existentes = sorted(
     key=lambda x: -frequencia.get(x, 0)
 )
 
+# Interface de pergunta
 col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="dropdown")
+    pergunta_dropdown = st.selectbox(
+        "Escolha uma pergunta frequente:",
+        [""] + perguntas_existentes,
+        key="dropdown"
+    )
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
+# Geração de resposta
 resposta = ""
 if pergunta_final:
     with st.spinner("A pensar..."):
@@ -101,7 +135,7 @@ if resposta:
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta, unsafe_allow_html=True)
 
-# Upload de documentos
+# Upload
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
@@ -113,7 +147,6 @@ with col3:
             st.success("✅ Documento processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
-
 with col4:
     url = st.text_input("Ou insira um link para processar conteúdo:")
     if st.button("📥 Processar URL") and url:
@@ -138,7 +171,8 @@ if novo_json:
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
-            st.success("✅ Base de conhecimento atualizada. Nova pergunta já disponível.")
+            st.success("✅ Base de conhecimento atualizada.")
+            st.experimental_set_query_params(refresh="1")
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
@@ -157,15 +191,17 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
             todas[nova_pergunta] = {
                 "pergunta": nova_pergunta,
                 "resposta": nova_resposta,
-                "email": novo_email,
-                "modelo_email": novo_modelo
+                "email": novo_email if novo_email.strip() else None,
+                "modelo_email": novo_modelo if novo_modelo.strip() else None
             }
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
-            st.success("✅ Pergunta adicionada com sucesso. Já está disponível no dropdown.")
+            st.success("✅ Pergunta adicionada com sucesso.")
+            st.experimental_set_query_params(refresh="1")
         else:
             st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
 
+# Rodapé
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
