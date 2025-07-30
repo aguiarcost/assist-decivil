@@ -112,4 +112,4 @@ if pergunta_final:
 
 if resposta:
     st.markdown("---")
-    st.subheader("
+st.subheader("💡 Resposta do assistente")
