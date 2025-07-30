@@ -63,7 +63,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Leitura da base de conhecimento
-@st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
