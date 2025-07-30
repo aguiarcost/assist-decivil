@@ -86,11 +86,10 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
                 if modelo:
                     resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
                 return resposta + "\n\n(Fonte: Base de conhecimento, correspondência exata)"
-        
+
         # Se não houver correspondência exata, usar busca por similaridade
         embedding_utilizador = get_embedding(pergunta_utilizador)
-        
-        # Busca na base de conhecimento
+
         if len(knowledge_embeddings) > 0:
             sims_knowledge = cosine_similarity(embedding_utilizador, knowledge_embeddings)[0]
             max_sim_k = np.max(sims_knowledge)
@@ -104,21 +103,19 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
                 if modelo:
                     resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
                 return resposta + f"\n\n(Fonte: Base de conhecimento, similaridade: {max_sim_k:.2f})"
-        
+
         # Se não encontrou ou similaridade baixa, usa RAG nos documentos
         if use_documents and len(documents_embeddings) > 0:
             sims_docs = cosine_similarity(embedding_utilizador, documents_embeddings)[0]
-            top_indices = np.argsort(sims_docs)[-3:][::-1]  # Top 3 chunks
+            top_indices = np.argsort(sims_docs)[-3:][::-1]
             context = ""
             sources = []
             for idx in top_indices:
-                if sims_docs[idx] > 0.7:  # Threshold para relevância
+                if sims_docs[idx] > 0.7:
                     item = documents_data[idx]
                     context += f"\n\n---\n{item['texto']}"
                     sources.append(f"{item['origem']}, página {item['pagina']}")
-            
             if context:
-                # Prompt para GPT
                 prompt = f"Baseado no contexto seguinte, responde à pergunta: {pergunta_utilizador}\n\nContexto:{context}\n\nResposta:"
                 response = openai.chat.completions.create(
                     model="gpt-4o-mini",
@@ -127,7 +124,7 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
                 )
                 generated = response.choices[0].message.content.strip()
                 return generated + f"\n\n(Fonte: Documentos processados - {', '.join(sources)})"
-        
+
         return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento ou documentos."
     except Exception as e:
         return f"❌ Erro ao gerar resposta: {str(e)}"
