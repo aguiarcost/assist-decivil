@@ -16,7 +16,9 @@ st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", la
 # Estilo customizado
 st.markdown("""
     <style>
-    .stApp { background-color: #fff3e0; }
+    .stApp {
+        background-color: #fff3e0;
+    }
     .titulo-container {
         display: flex;
         align-items: center;
@@ -62,13 +64,14 @@ def carregar_base_conhecimento():
 # Guardar histórico de perguntas
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
-    historico = []
     if os.path.exists(CAMINHO_HISTORICO):
         try:
             with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
                 historico = json.load(f)
         except json.JSONDecodeError:
-            pass
+            historico = []
+    else:
+        historico = []
     historico.append(registo)
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
@@ -102,14 +105,17 @@ with col1:
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
+# Determinar pergunta final
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
+# Gerar resposta
 resposta = ""
 if pergunta_final:
     with st.spinner("A pensar..."):
-        resposta = gerar_resposta(pergunta_final, use_documents=False)
+        resposta = gerar_resposta(pergunta_final, use_documents=False)  # Apenas base conhecimento
         guardar_pergunta_no_historico(pergunta_final)
 
+# Mostrar resposta
 if resposta:
     st.markdown("---")
-st.subheader("💡 Resposta do assistente")
+    st.subheader("
