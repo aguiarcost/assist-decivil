@@ -6,19 +6,22 @@ from assistente import gerar_resposta
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 
-# Inicialização de variáveis
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Configuração da página
-st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
+# Configurar chave OpenAI
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+elif os.getenv("OPENAI_API_KEY"):
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+else:
+    st.warning("⚠️ A chave da API não está definida.")
 
-# Estilo customizado
+# Estilo e layout
+st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #fff3e0;
-    }
+    .stApp { background-color: #fff3e0; }
     .titulo-container {
         display: flex;
         align-items: center;
@@ -43,7 +46,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Cabeçalho com avatar e título
+# Cabeçalho
 st.markdown("""
     <div class="titulo-container">
         <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
@@ -51,7 +54,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Leitura da base de conhecimento
+# Funções auxiliares
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
@@ -61,120 +64,38 @@ def carregar_base_conhecimento():
             return []
     return []
 
-# Guardar histórico de perguntas
 def guardar_pergunta_no_historico(pergunta):
     registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
+    historico = []
     if os.path.exists(CAMINHO_HISTORICO):
         try:
             with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
                 historico = json.load(f)
         except json.JSONDecodeError:
-            historico = []
-    else:
-        historico = []
+            pass
     historico.append(registo)
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Configurar chave OpenAI
-if "OPENAI_API_KEY" in st.secrets:
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
-elif os.getenv("OPENAI_API_KEY"):
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-else:
-    st.warning("⚠️ A chave da API não está definida.")
-
-# Interface de pergunta
+# Interface principal
 base_conhecimento = carregar_base_conhecimento()
-frequencia = {}
-if os.path.exists(CAMINHO_HISTORICO):
-    try:
-        with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
-            historico = json.load(f)
-            for item in historico:
-                p = item.get("pergunta")
-                if p:
-                    frequencia[p] = frequencia.get(p, 0) + 1
-    except json.JSONDecodeError:
-        pass
-
-perguntas_existentes = sorted(
-    set(p["pergunta"] for p in base_conhecimento),
-    key=lambda x: -frequencia.get(x, 0)
-)
+perguntas_existentes = [p["pergunta"] for p in base_conhecimento if "pergunta" in p]
+perguntas_existentes = sorted(list(set(perguntas_existentes)))
 
 col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox(
-        "Escolha uma pergunta frequente:", 
-        [""] + perguntas_existentes, 
-        key="dropdown"
-    )
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="dropdown")
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
-# Determinar pergunta final
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
-
-# Gerar resposta
 resposta = ""
+
 if pergunta_final:
     with st.spinner("A pensar..."):
-        resposta = gerar_resposta(pergunta_final, use_documents=False)  # Só base de conhecimento
+        resposta = gerar_resposta(pergunta_final)
         guardar_pergunta_no_historico(pergunta_final)
 
-# Mostrar resposta
 if resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
-    st.markdown(resposta, unsafe_allow_html=True)
-
-# Upload de ficheiro com novas perguntas
-st.markdown("---")
-st.subheader("📎 Atualizar base de conhecimento")
-novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
-if novo_json:
-    try:
-        novas_perguntas = json.load(novo_json)
-        if isinstance(novas_perguntas, list):
-            base_existente = carregar_base_conhecimento()
-            todas = {p["pergunta"]: p for p in base_existente}
-            for nova in novas_perguntas:
-                todas[nova["pergunta"]] = nova
-            with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            gerar_embeddings()  # Atualizar embeddings
-            st.success("✅ Base de conhecimento atualizada.")
-            st.rerun()  # Refresh para atualizar dropdown
-        else:
-            st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
-    except Exception as e:
-        st.error(f"Erro ao ler ficheiro JSON: {e}")
-
-# Adição manual de nova pergunta
-with st.expander("➕ Adicionar nova pergunta manualmente"):
-    nova_pergunta = st.text_input("Nova pergunta")
-    nova_resposta = st.text_area("Resposta à pergunta")
-    novo_email = st.text_input("Email de contacto (opcional)")
-    novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
-    if st.button("Guardar pergunta"):
-        if nova_pergunta and nova_resposta:
-            base_existente = carregar_base_conhecimento()
-            todas = {p["pergunta"]: p for p in base_existente}
-            todas[nova_pergunta] = {
-                "pergunta": nova_pergunta,
-                "resposta": nova_resposta,
-                "email": novo_email,
-                "modelo_email": novo_modelo
-            }
-            with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-            gerar_embeddings()  # Atualizar embeddings
-            st.success("✅ Pergunta adicionada com sucesso.")
-            st.rerun()
-        else:
-            st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
-
-# Rodapé com copyright
-st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
-st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
