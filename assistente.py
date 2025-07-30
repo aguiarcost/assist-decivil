@@ -7,78 +7,96 @@ import numpy as np
 # Carregar chave API
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Caminhos dos ficheiros
+# Caminhos
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
 CAMINHO_DOCUMENTS_VECTOR = "base_documents_vector.json"
 
 # Carregar dados
+
 def carregar_dados():
-    # Base de conhecimento (perguntas e respostas)
-    try:
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
-            knowledge_base = json.load(f)
-    except Exception:
-        knowledge_base = []
+    def ler_json_caminho(caminho):
+        if os.path.exists(caminho):
+            try:
+                with open(caminho, "r", encoding="utf-8-sig") as f:
+                    content = f.read().strip()
+                    if content:
+                        return json.loads(content)
+            except json.JSONDecodeError:
+                print(f"Erro ao decodificar {caminho}")
+        return []
 
-    # Vetores de embeddings da base de conhecimento
-    try:
-        with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
-            knowledge_data = json.load(f)
-    except Exception:
-        knowledge_data = []
+    knowledge_base = ler_json_caminho(CAMINHO_CONHECIMENTO)
+    knowledge_data = ler_json_caminho(CAMINHO_KNOWLEDGE_VECTOR)
+    documents_data = ler_json_caminho(CAMINHO_DOCUMENTS_VECTOR)
 
-    knowledge_embeddings = np.array([item["embedding"] for item in knowledge_data]) if knowledge_data else np.array([])
+    knowledge_embeddings = (
+        np.array([item["embedding"] for item in knowledge_data])
+        if knowledge_data
+        else np.array([])
+    )
     knowledge_perguntas = [item["pergunta"] for item in knowledge_data]
 
-    # Vetores de embeddings dos documentos
-    try:
-        with open(CAMINHO_DOCUMENTS_VECTOR, "r", encoding="utf-8-sig") as f:
-            documents_data = json.load(f)
-    except Exception:
-        documents_data = []
+    documents_embeddings = (
+        np.array([item["embedding"] for item in documents_data])
+        if documents_data
+        else np.array([])
+    )
 
-    documents_embeddings = np.array([item["embedding"] for item in documents_data]) if documents_data else np.array([])
+    return (
+        knowledge_base,
+        knowledge_data,
+        knowledge_perguntas,
+        knowledge_embeddings,
+        documents_data,
+        documents_embeddings,
+    )
 
-    return knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings, documents_data, documents_embeddings
+(
+    knowledge_base,
+    knowledge_data,
+    knowledge_perguntas,
+    knowledge_embeddings,
+    documents_data,
+    documents_embeddings,
+) = carregar_dados()
 
-knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings, documents_data, documents_embeddings = carregar_dados()
+# Gerar embedding
 
-# Gerar embedding para novo texto
 def get_embedding(text):
     response = openai.embeddings.create(model="text-embedding-3-small", input=text)
     return np.array(response.data[0].embedding).reshape(1, -1)
 
-# Gerar resposta final
+# Gerar resposta
+
 def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
     try:
-        pergunta_input = pergunta_utilizador.strip().lower()
+        pergunta_normalizada = pergunta_utilizador.strip().lower()
 
-        # Procura exata
+        # Correspondência exata
         for item in knowledge_base:
-            if item["pergunta"].strip().lower() == pergunta_input:
-                resposta = item.get("resposta", "")
+            if item["pergunta"].strip().lower() == pergunta_normalizada:
+                resposta = item["resposta"]
                 if item.get("email"):
                     resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-                modelo = item.get("modelo_email", "").strip()
-                if modelo:
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+                if item.get("modelo_email") and item["modelo_email"].strip():
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
                 return resposta + "\n\n(Fonte: Base de conhecimento, correspondência exata)"
 
-        # Similaridade com base de conhecimento
+        # Similaridade
+        embedding_utilizador = get_embedding(pergunta_utilizador)
+
         if len(knowledge_embeddings) > 0:
-            embedding_utilizador = get_embedding(pergunta_utilizador)
             sims_knowledge = cosine_similarity(embedding_utilizador, knowledge_embeddings)[0]
             max_sim_k = np.max(sims_knowledge)
             if max_sim_k >= threshold:
                 idx = int(np.argmax(sims_knowledge))
                 item = knowledge_data[idx]
-                resposta = item.get("resposta", "")
+                resposta = item["resposta"]
                 if item.get("email"):
                     resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-                modelo = item.get("modelo_email", "").strip()
-                if modelo:
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+                if item.get("modelo_email") and item["modelo_email"].strip():
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
                 return resposta + f"\n\n(Fonte: Base de conhecimento, similaridade: {max_sim_k:.2f})"
 
         # RAG com documentos
@@ -91,7 +109,8 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
                 if sims_docs[idx] > 0.7:
                     item = documents_data[idx]
                     context += f"\n\n---\n{item['texto']}"
-                    sources.append(f"{item['origem']}, página {item['pagina']}")
+                    sources.append(f"{item['origem']}, p. {item['pagina']}")
+
             if context:
                 prompt = f"Baseado no contexto seguinte, responde à pergunta: {pergunta_utilizador}\n\nContexto:{context}\n\nResposta:"
                 response = openai.chat.completions.create(
@@ -103,7 +122,5 @@ def gerar_resposta(pergunta_utilizador, use_documents=True, threshold=0.8):
                 return generated + f"\n\n(Fonte: Documentos processados - {', '.join(sources)})"
 
         return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento ou documentos."
-
     except Exception as e:
         return f"❌ Erro ao gerar resposta: {str(e)}"
-        
