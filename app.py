@@ -8,23 +8,80 @@ from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 import glob
 
-# Inicialização de variáveis
+# Caminhos
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"
+CAMINHO_DOCUMENTOS_PROCESSADOS = "documentos_processados.json"
 
-# Session state inicial
-if 'base_documents_vector' not in st.session_state:
-    st.session_state.base_documents_vector = []
-if 'documents_processed' not in st.session_state:
-    st.session_state.documents_processed = False
-if 'trigger_refresh' not in st.session_state:
-    st.session_state.trigger_refresh = False
+# Funções de controle de documentos processados
+def carregar_documentos_processados():
+    if os.path.exists(CAMINHO_DOCUMENTOS_PROCESSADOS):
+        try:
+            with open(CAMINHO_DOCUMENTOS_PROCESSADOS, "r", encoding="utf-8") as f:
+                return set(json.load(f))
+        except:
+            return set()
+    return set()
 
-# Configurar página
+def guardar_documento_processado(nome_ficheiro):
+    documentos = carregar_documentos_processados()
+    documentos.add(nome_ficheiro)
+    with open(CAMINHO_DOCUMENTOS_PROCESSADOS, "w", encoding="utf-8") as f:
+        json.dump(list(documentos), f, ensure_ascii=False, indent=2)
+
+# Processar documentos se novos
+def processar_documentos_pasta(force_reprocess=False):
+    if not os.path.exists(PASTA_DOCUMENTOS):
+        os.makedirs(PASTA_DOCUMENTOS)
+    documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))
+    processados = carregar_documentos_processados()
+
+    for doc_path in documentos:
+        basename = os.path.basename(doc_path)
+        if basename not in processados or force_reprocess:
+            try:
+                with open(doc_path, "rb") as f:
+                    salvos = processar_documento(f)
+                guardar_documento_processado(basename)
+                st.success(f"✅ Documento {basename} processado com {salvos} blocos.")
+            except Exception as e:
+                st.error(f"Erro ao processar {basename}: {e}")
+
+# Guarda histórico
+def guardar_pergunta_no_historico(pergunta):
+    registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
+    if os.path.exists(CAMINHO_HISTORICO):
+        try:
+            with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
+                historico = json.load(f)
+        except:
+            historico = []
+    else:
+        historico = []
+    historico.append(registo)
+    with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
+        json.dump(historico, f, ensure_ascii=False, indent=2)
+
+# Carregar base de conhecimento
+def carregar_base_conhecimento():
+    if os.path.exists(CAMINHO_CONHECIMENTO):
+        try:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+# Config pagina
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
-# Estilo e título
+# Processamento inicial
+if 'initialized' not in st.session_state:
+    processar_documentos_pasta()
+    st.session_state.initialized = True
+
+# Titulo e estilo
 st.markdown("""
     <style>
     .stApp { background-color: #fff3e0; }
@@ -36,7 +93,8 @@ st.markdown("""
         margin-bottom: 30px;
     }
     .titulo-container img {
-        width: 70px; height: auto;
+        width: 70px;
+        height: auto;
     }
     .titulo-container h1 {
         color: #ef6c00;
@@ -53,64 +111,12 @@ st.markdown("""
 
 st.markdown("""
     <div class="titulo-container">
-        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png">
+        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
         <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
 """, unsafe_allow_html=True)
 
-# Chave API
-if "OPENAI_API_KEY" in st.secrets:
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
-elif os.getenv("OPENAI_API_KEY"):
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-else:
-    st.warning("⚠️ A chave da API não está definida.")
-
-# Funções utilitárias
-def carregar_base_conhecimento():
-    if os.path.exists(CAMINHO_CONHECIMENTO):
-        try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return []
-    return []
-
-def guardar_pergunta_no_historico(pergunta):
-    registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
-    historico = []
-    if os.path.exists(CAMINHO_HISTORICO):
-        try:
-            with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
-                historico = json.load(f)
-        except json.JSONDecodeError:
-            pass
-    historico.append(registo)
-    with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
-        json.dump(historico, f, ensure_ascii=False, indent=2)
-
-def processar_documentos_pasta():
-    if not os.path.exists(PASTA_DOCUMENTOS):
-        os.makedirs(PASTA_DOCUMENTOS)
-    documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))
-    processados = {os.path.basename(item['origem']) for item in st.session_state.base_documents_vector}
-
-    for doc_path in documentos:
-        basename = os.path.basename(doc_path)
-        if basename not in processados:
-            try:
-                with open(doc_path, "rb") as f:
-                    salvos = processar_documento(f)
-                st.toast(f"✅ {basename} processado ({salvos} blocos).")
-            except Exception as e:
-                st.toast(f"❌ Erro no processamento de {basename}: {e}")
-
-# Início do processamento inicial
-if not st.session_state.documents_processed:
-    processar_documentos_pasta()
-    st.session_state.documents_processed = True
-
-# Carregar conhecimento e histórico
+# Interface
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 if os.path.exists(CAMINHO_HISTORICO):
@@ -121,33 +127,29 @@ if os.path.exists(CAMINHO_HISTORICO):
                 p = item.get("pergunta")
                 if p:
                     frequencia[p] = frequencia.get(p, 0) + 1
-    except json.JSONDecodeError:
+    except:
         pass
 
-perguntas_existentes = sorted(
-    set(p["pergunta"] for p in base_conhecimento),
-    key=lambda x: -frequencia.get(x, 0)
-)
+perguntas_existentes = sorted(set(p["pergunta"] for p in base_conhecimento), key=lambda x: -frequencia.get(x, 0))
 
-# Interface principal de pergunta
 col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="dropdown")
 with col2:
-    pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
+    pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
-
-# Gerar resposta
+resposta = ""
 if pergunta_final:
     with st.spinner("A pensar..."):
         resposta = gerar_resposta(pergunta_final, use_documents=True)
         guardar_pergunta_no_historico(pergunta_final)
-        st.markdown("---")
-        st.subheader("💡 Resposta do assistente")
-        st.markdown(resposta, unsafe_allow_html=True)
 
-# Upload de documentos
+if resposta:
+    st.markdown("---")
+    st.subheader("💡 Resposta do assistente")
+    st.markdown(resposta, unsafe_allow_html=True)
+
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
@@ -156,6 +158,7 @@ with col3:
     if ficheiro:
         try:
             processar_documento(ficheiro)
+            guardar_documento_processado(ficheiro.name)
             st.success("✅ Documento processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
@@ -169,7 +172,6 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Atualização da base de conhecimento com ficheiro JSON
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -185,13 +187,12 @@ if novo_json:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
             st.success("✅ Base de conhecimento atualizada.")
-            st.session_state.trigger_refresh = True
+            st.rerun()
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Adição manual de nova pergunta
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
@@ -211,16 +212,9 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
             st.success("✅ Pergunta adicionada com sucesso.")
-            st.session_state.trigger_refresh = True
+            st.rerun()
         else:
             st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
 
-# Rodapé
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
-
-# Forçar refresh ao dropdown (após nova pergunta)
-if st.session_state.trigger_refresh:
-    st.session_state.trigger_refresh = False
-    st.query_params.clear()  # Atualização de URL
-    st.rerun()
