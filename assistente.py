@@ -7,24 +7,20 @@ import numpy as np
 # Carregar chave API
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Caminhos
+# Caminhos para os ficheiros
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
 
 # Carregar dados
-
 def carregar_dados():
     # Base de conhecimento (Q&A)
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
             with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
                 content = f.read().strip()
-                if content:
-                    knowledge_base = json.loads(content)
-                else:
-                    knowledge_base = []
+                knowledge_base = json.loads(content) if content else []
         except json.JSONDecodeError:
-            print("Erro ao decodificar base_conhecimento.json; inicializando como vazio.")
+            print("Erro ao carregar base_conhecimento.json")
             knowledge_base = []
     else:
         knowledge_base = []
@@ -34,24 +30,19 @@ def carregar_dados():
         try:
             with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
                 content = f.read().strip()
-                if content:
-                    knowledge_data = json.loads(content)
-                else:
-                    knowledge_data = []
+                knowledge_data = json.loads(content) if content else []
         except json.JSONDecodeError:
-            print("Erro ao decodificar base_knowledge_vector.json; inicializando como vazio.")
+            print("Erro ao carregar base_knowledge_vector.json")
             knowledge_data = []
     else:
         knowledge_data = []
 
-    knowledge_embeddings = (
-        np.array([item["embedding"] for item in knowledge_data]) if knowledge_data else np.array([])
-    )
+    knowledge_embeddings = np.array([item["embedding"] for item in knowledge_data]) if knowledge_data else np.array([])
     knowledge_perguntas = [item["pergunta"] for item in knowledge_data]
 
     return knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings
 
-# Inicializar
+# Inicializa dados na carga do módulo
 knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings = carregar_dados()
 
 # Gerar embedding
@@ -59,25 +50,24 @@ def get_embedding(text):
     response = openai.embeddings.create(model="text-embedding-3-small", input=text)
     return np.array(response.data[0].embedding).reshape(1, -1)
 
-# Gerar resposta
+# Gerar resposta com base em similaridade
 def gerar_resposta(pergunta_utilizador, threshold=0.8):
     try:
-        # Verificar correspondência exata
+        # Procurar correspondência exata
         for item in knowledge_base:
             if item["pergunta"].strip().lower() == pergunta_utilizador.strip().lower():
                 resposta = item["resposta"]
                 if item.get("email"):
                     resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
                 modelo = item.get("modelo_email", "")
-                if modelo.strip():
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```
-{modelo}
-```"
+                if modelo and modelo.strip():
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo.strip()}\n```"
                 return resposta + "\n\n(Fonte: Base de conhecimento, correspondência exata)"
 
-        # Similaridade se não houver correspondência exata
+        # Gerar embedding da pergunta
         embedding_utilizador = get_embedding(pergunta_utilizador)
 
+        # Calcular similaridade
         if len(knowledge_embeddings) > 0:
             sims = cosine_similarity(embedding_utilizador, knowledge_embeddings)[0]
             max_sim = np.max(sims)
@@ -88,13 +78,10 @@ def gerar_resposta(pergunta_utilizador, threshold=0.8):
                 if item.get("email"):
                     resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
                 modelo = item.get("modelo_email", "")
-                if modelo.strip():
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```
-{modelo}
-```"
+                if modelo and modelo.strip():
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo.strip()}\n```"
                 return resposta + f"\n\n(Fonte: Base de conhecimento, similaridade: {max_sim:.2f})"
 
         return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento."
-
     except Exception as e:
         return f"❌ Erro ao gerar resposta: {str(e)}"
