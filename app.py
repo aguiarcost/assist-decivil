@@ -6,13 +6,14 @@ from assistente import gerar_resposta
 from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 
-# Caminhos
+# Caminhos dos ficheiros
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Inicializar página
-st.set_page_config(page_title="Felisberto, Assistente ACSUTA", layout="wide")
+# Configuração da página
+st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
+# Estilo customizado
 st.markdown("""
     <style>
     .stApp {
@@ -42,6 +43,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Cabeçalho com avatar e título
 st.markdown("""
     <div class="titulo-container">
         <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
@@ -50,7 +52,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Carregar base de conhecimento
-@st.cache_data
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
@@ -69,20 +70,12 @@ def guardar_pergunta_no_historico(pergunta):
             with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
                 historico = json.load(f)
         except json.JSONDecodeError:
-            pass
+            historico = []
     historico.append(registo)
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Configurar chave OpenAI
-if "OPENAI_API_KEY" in st.secrets:
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
-elif os.getenv("OPENAI_API_KEY"):
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-else:
-    st.warning("⚠️ A chave da API não está definida.")
-
-# Interface principal
+# Carregar perguntas
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 if os.path.exists(CAMINHO_HISTORICO):
@@ -101,13 +94,20 @@ perguntas_existentes = sorted(
     key=lambda x: -frequencia.get(x, 0)
 )
 
+# Interface de pergunta
 col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="dropdown")
+    pergunta_dropdown = st.selectbox(
+        "Escolha uma pergunta frequente:",
+        [""] + perguntas_existentes,
+        key="dropdown"
+    )
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
+
+# Gerar resposta
 resposta = ""
 if pergunta_final:
     with st.spinner("A pensar..."):
@@ -119,29 +119,27 @@ if resposta:
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta, unsafe_allow_html=True)
 
-# Adição manual de pergunta
+# Upload de novas perguntas (JSON)
 st.markdown("---")
-st.subheader("➕ Adicionar nova pergunta manualmente")
-nova_pergunta = st.text_input("Nova pergunta")
-nova_resposta = st.text_area("Resposta à pergunta")
-novo_email = st.text_input("Email de contacto (opcional)")
-novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
-if st.button("Guardar pergunta"):
-    if nova_pergunta and nova_resposta:
-        base_existente = carregar_base_conhecimento()
-        todas = {p["pergunta"]: p for p in base_existente}
-        todas[nova_pergunta] = {
-            "pergunta": nova_pergunta,
-            "resposta": nova_resposta,
-            "email": novo_email,
-            "modelo_email": novo_modelo
-        }
-        with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-            json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-        gerar_embeddings()
-        st.success("✅ Pergunta adicionada com sucesso. Atualize a página para ver no dropdown.")
-    else:
-        st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
+st.subheader("📝 Atualizar base de conhecimento")
+novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
+if novo_json:
+    try:
+        novas_perguntas = json.load(novo_json)
+        if isinstance(novas_perguntas, list):
+            base_existente = carregar_base_conhecimento()
+            todas = {p["pergunta"]: p for p in base_existente}
+            for nova in novas_perguntas:
+                todas[nova["pergunta"]] = nova
+            with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
+                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+            gerar_embeddings()  # Atualizar embeddings
+            st.success("✅ Base de conhecimento atualizada com sucesso.")
+            st.rerun()
+        else:
+            st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
+    except Exception as e:
+        st.error(f"Erro ao ler ficheiro JSON: {e}")
 
 # Rodapé
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
