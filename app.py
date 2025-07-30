@@ -8,12 +8,10 @@ from gerar_embeddings import main as gerar_embeddings
 from datetime import datetime
 import glob
 
-# Configurações
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"
 
-# Inicializações
 if 'base_documents_vector' not in st.session_state:
     st.session_state.base_documents_vector = []
 if 'documents_processed' not in st.session_state:
@@ -21,36 +19,28 @@ if 'documents_processed' not in st.session_state:
 
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
-# Estilo
 st.markdown("""
-<style>
-.stApp { background-color: #fff3e0; }
-.titulo-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 10px;
-    margin-bottom: 30px;
-}
-.titulo-container img { width: 70px; height: auto; }
-.titulo-container h1 {
-    color: #ef6c00;
-    font-size: 2em;
-    margin: 0;
-}
-.footer { text-align: center; color: gray; margin-top: 50px; }
-</style>
+    <style>
+    .stApp { background-color: #fff3e0; }
+    .titulo-container {
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 10px; margin-bottom: 30px;
+    }
+    .titulo-container img { width: 70px; height: auto; }
+    .titulo-container h1 {
+        color: #ef6c00; font-size: 2em; margin: 0;
+    }
+    .footer { text-align: center; color: gray; margin-top: 50px; }
+    </style>
 """, unsafe_allow_html=True)
 
-# Cabeçalho
 st.markdown("""
-<div class="titulo-container">
-    <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png">
-    <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
-</div>
+    <div class="titulo-container">
+        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
+        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
+    </div>
 """, unsafe_allow_html=True)
 
-# Carregar conhecimento
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
@@ -73,7 +63,6 @@ def guardar_pergunta_no_historico(pergunta):
     with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
         json.dump(historico, f, ensure_ascii=False, indent=2)
 
-# Chave OpenAI
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 elif os.getenv("OPENAI_API_KEY"):
@@ -81,12 +70,12 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-# Processar documentos da pasta (quando chamado)
 def processar_documentos_pasta():
     if not os.path.exists(PASTA_DOCUMENTOS):
         os.makedirs(PASTA_DOCUMENTOS)
     documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))
     processados = {os.path.basename(item['origem']) for item in st.session_state.base_documents_vector}
+
     for doc_path in documentos:
         basename = os.path.basename(doc_path)
         if basename not in processados:
@@ -96,8 +85,10 @@ def processar_documentos_pasta():
                 st.success(f"✅ Documento {basename} processado com {salvos} blocos.")
             except Exception as e:
                 st.error(f"Erro ao processar {basename}: {e}")
+        else:
+            st.info(f"ℹ️ Documento {basename} já tinha sido processado.")
 
-# UI: Pergunta
+# Interface de perguntas
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 if os.path.exists(CAMINHO_HISTORICO):
@@ -118,13 +109,17 @@ perguntas_existentes = sorted(
 
 col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="dropdown")
+    pergunta_dropdown = st.selectbox(
+        "Escolha uma pergunta frequente:",
+        [""] + perguntas_existentes,
+        key="dropdown"
+    )
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
-
 resposta = ""
+
 if pergunta_final:
     with st.spinner("A pensar..."):
         resposta = gerar_resposta(pergunta_final, use_documents=True)
@@ -135,7 +130,7 @@ if resposta:
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta, unsafe_allow_html=True)
 
-# Upload
+# Upload de documentos
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
@@ -157,17 +152,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Processamento manual
-st.markdown("---")
-st.subheader("⚙️ Processar documentos existentes")
-if not st.session_state.documents_processed:
-    if st.button("Iniciar Processamento de Documentos"):
-        st.session_state.documents_processed = True
-        processar_documentos_pasta()
-else:
-    st.info("✅ Documentos já foram processados.")
-
-# Atualização manual da base
+# Atualização da base de conhecimento via ficheiro
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -183,12 +168,13 @@ if novo_json:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
             st.success("✅ Base de conhecimento atualizada.")
+            st.experimental_rerun()
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Adição manual
+# Inserção manual
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
@@ -201,16 +187,23 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
             todas[nova_pergunta] = {
                 "pergunta": nova_pergunta,
                 "resposta": nova_resposta,
-                "email": novo_email.strip(),
-                "modelo_email": novo_modelo.strip()
+                "email": novo_email,
+                "modelo_email": novo_modelo
             }
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
             st.success("✅ Pergunta adicionada com sucesso.")
+            st.experimental_rerun()
         else:
             st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
 
-# Rodapé
+# Rodapé e processamento manual
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
+
+if not st.session_state.documents_processed:
+    if st.button("Iniciar Processamento de Documentos da Pasta"):
+        processar_documentos_pasta()
+        st.session_state.documents_processed = True
+        st.success("✅ Documentos da pasta foram processados.")
