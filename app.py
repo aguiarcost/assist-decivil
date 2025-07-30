@@ -12,31 +12,26 @@ CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"
 
+# Inicializa base_documents_vector
 if 'base_documents_vector' not in st.session_state:
     st.session_state.base_documents_vector = []
-if 'documents_processed' not in st.session_state:
-    st.session_state.documents_processed = False
 
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
+# Estilo e cabeçalho
 st.markdown("""
     <style>
     .stApp { background-color: #fff3e0; }
-    .titulo-container {
-        display: flex; align-items: center; gap: 10px;
-        margin-top: 10px; margin-bottom: 30px;
-    }
-    .titulo-container img { width: 70px; height: auto; }
-    .titulo-container h1 {
-        color: #ef6c00; font-size: 2em; margin: 0;
-    }
+    .titulo-container { display: flex; align-items: center; gap: 10px; margin-top: 10px; margin-bottom: 30px; }
+    .titulo-container img { width: 70px; }
+    .titulo-container h1 { color: #ef6c00; font-size: 2em; margin: 0; }
     .footer { text-align: center; color: gray; margin-top: 50px; }
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
     <div class="titulo-container">
-        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
+        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png">
         <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
 """, unsafe_allow_html=True)
@@ -44,7 +39,7 @@ st.markdown("""
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
             return []
@@ -70,25 +65,7 @@ elif os.getenv("OPENAI_API_KEY"):
 else:
     st.warning("⚠️ A chave da API não está definida.")
 
-def processar_documentos_pasta():
-    if not os.path.exists(PASTA_DOCUMENTOS):
-        os.makedirs(PASTA_DOCUMENTOS)
-    documentos = glob.glob(os.path.join(PASTA_DOCUMENTOS, "*"))
-    processados = {os.path.basename(item['origem']) for item in st.session_state.base_documents_vector}
-
-    for doc_path in documentos:
-        basename = os.path.basename(doc_path)
-        if basename not in processados:
-            try:
-                with open(doc_path, "rb") as f:
-                    salvos = processar_documento(f)
-                st.success(f"✅ Documento {basename} processado com {salvos} blocos.")
-            except Exception as e:
-                st.error(f"Erro ao processar {basename}: {e}")
-        else:
-            st.info(f"ℹ️ Documento {basename} já tinha sido processado.")
-
-# Interface de perguntas
+# Interface de pergunta
 base_conhecimento = carregar_base_conhecimento()
 frequencia = {}
 if os.path.exists(CAMINHO_HISTORICO):
@@ -102,18 +79,11 @@ if os.path.exists(CAMINHO_HISTORICO):
     except json.JSONDecodeError:
         pass
 
-perguntas_existentes = sorted(
-    set(p["pergunta"] for p in base_conhecimento),
-    key=lambda x: -frequencia.get(x, 0)
-)
+perguntas_existentes = sorted(set(p["pergunta"] for p in base_conhecimento), key=lambda x: -frequencia.get(x, 0))
 
 col1, col2 = st.columns(2)
 with col1:
-    pergunta_dropdown = st.selectbox(
-        "Escolha uma pergunta frequente:",
-        [""] + perguntas_existentes,
-        key="dropdown"
-    )
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes, key="dropdown")
 with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
@@ -130,7 +100,7 @@ if resposta:
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta, unsafe_allow_html=True)
 
-# Upload de documentos
+# Upload
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
@@ -142,7 +112,6 @@ with col3:
             st.success("✅ Documento processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
-
 with col4:
     url = st.text_input("Ou insira um link para processar conteúdo:")
     if st.button("📥 Processar URL") and url:
@@ -152,7 +121,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Atualização da base de conhecimento via ficheiro
+# Atualizar base com JSON
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -168,13 +137,13 @@ if novo_json:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
             st.success("✅ Base de conhecimento atualizada.")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Inserção manual
+# Adicionar manualmente
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
@@ -194,16 +163,9 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
             st.success("✅ Pergunta adicionada com sucesso.")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
 
-# Rodapé e processamento manual
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
-
-if not st.session_state.documents_processed:
-    if st.button("Iniciar Processamento de Documentos da Pasta"):
-        processar_documentos_pasta()
-        st.session_state.documents_processed = True
-        st.success("✅ Documentos da pasta foram processados.")
