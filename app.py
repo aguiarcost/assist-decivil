@@ -12,18 +12,16 @@ CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_HISTORICO = "historico_perguntas.json"
 PASTA_DOCUMENTOS = "documentos"
 
-# Inicializa base_documents_vector
 if 'base_documents_vector' not in st.session_state:
     st.session_state.base_documents_vector = []
 
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
-# Estilo e cabeçalho
 st.markdown("""
     <style>
     .stApp { background-color: #fff3e0; }
     .titulo-container { display: flex; align-items: center; gap: 10px; margin-top: 10px; margin-bottom: 30px; }
-    .titulo-container img { width: 70px; }
+    .titulo-container img { width: 70px; height: auto; }
     .titulo-container h1 { color: #ef6c00; font-size: 2em; margin: 0; }
     .footer { text-align: center; color: gray; margin-top: 50px; }
     </style>
@@ -31,7 +29,7 @@ st.markdown("""
 
 st.markdown("""
     <div class="titulo-container">
-        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png">
+        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
         <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
     </div>
 """, unsafe_allow_html=True)
@@ -39,7 +37,7 @@ st.markdown("""
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
                 return json.load(f)
         except json.JSONDecodeError:
             return []
@@ -79,7 +77,10 @@ if os.path.exists(CAMINHO_HISTORICO):
     except json.JSONDecodeError:
         pass
 
-perguntas_existentes = sorted(set(p["pergunta"] for p in base_conhecimento), key=lambda x: -frequencia.get(x, 0))
+perguntas_existentes = sorted(
+    set(p["pergunta"] for p in base_conhecimento),
+    key=lambda x: -frequencia.get(x, 0)
+)
 
 col1, col2 = st.columns(2)
 with col1:
@@ -88,8 +89,8 @@ with col2:
     pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
 
 pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
-resposta = ""
 
+resposta = ""
 if pergunta_final:
     with st.spinner("A pensar..."):
         resposta = gerar_resposta(pergunta_final, use_documents=True)
@@ -100,7 +101,7 @@ if resposta:
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta, unsafe_allow_html=True)
 
-# Upload
+# Upload de documentos
 st.markdown("---")
 st.subheader("📎 Adicionar documentos ou links")
 col3, col4 = st.columns(2)
@@ -112,6 +113,7 @@ with col3:
             st.success("✅ Documento processado com sucesso.")
         except Exception as e:
             st.error(f"Erro: {e}")
+
 with col4:
     url = st.text_input("Ou insira um link para processar conteúdo:")
     if st.button("📥 Processar URL") and url:
@@ -121,7 +123,7 @@ with col4:
         except Exception as e:
             st.error(f"Erro: {e}")
 
-# Atualizar base com JSON
+# Atualizar base com ficheiro JSON
 st.markdown("---")
 st.subheader("📝 Atualizar base de conhecimento")
 novo_json = st.file_uploader("Adicionar ficheiro JSON com novas perguntas", type="json")
@@ -136,14 +138,13 @@ if novo_json:
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
-            st.success("✅ Base de conhecimento atualizada.")
-            st.rerun()
+            st.success("✅ Base de conhecimento atualizada. Nova pergunta já disponível.")
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
         st.error(f"Erro ao ler ficheiro JSON: {e}")
 
-# Adicionar manualmente
+# Adição manual
 with st.expander("➕ Adicionar nova pergunta manualmente"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
@@ -162,8 +163,7 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
             with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()
-            st.success("✅ Pergunta adicionada com sucesso.")
-            st.rerun()
+            st.success("✅ Pergunta adicionada com sucesso. Já está disponível no dropdown.")
         else:
             st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
 
