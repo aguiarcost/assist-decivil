@@ -1,76 +1,133 @@
-import openai
-import os
+import streamlit as st
 import json
-from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
+import os
+import openai
+from assistente import gerar_resposta
+from gerar_embeddings import main as gerar_embeddings
+from datetime import datetime
 
-# Carregar chave API
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
+# Caminhos
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
+CAMINHO_HISTORICO = "historico_perguntas.json"
 
-# Carregar dados
-def carregar_dados():
+# Configuração da página
+st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
+
+# Estilo
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #fff3e0;
+    }
+    .titulo-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        margin-bottom: 30px;
+    }
+    .titulo-container img {
+        width: 70px;
+        height: auto;
+    }
+    .titulo-container h1 {
+        color: #ef6c00;
+        font-size: 2em;
+        margin: 0;
+    }
+    .footer {
+        text-align: center;
+        color: gray;
+        margin-top: 50px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Cabeçalho com avatar
+st.markdown("""
+    <div class="titulo-container">
+        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
+        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
+    </div>
+""", unsafe_allow_html=True)
+
+# Carregar base de conhecimento
+def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
-                content = f.read().strip()
-                knowledge_base = json.loads(content) if content else []
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+                return json.load(f)
         except json.JSONDecodeError:
-            knowledge_base = []
-    else:
-        knowledge_base = []
+            return []
+    return []
 
-    if os.path.exists(CAMINHO_KNOWLEDGE_VECTOR):
+# Guardar histórico
+def guardar_pergunta_no_historico(pergunta):
+    registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
+    historico = []
+    if os.path.exists(CAMINHO_HISTORICO):
         try:
-            with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8-sig") as f:
-                content = f.read().strip()
-                knowledge_data = json.loads(content) if content else []
+            with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
+                historico = json.load(f)
         except json.JSONDecodeError:
-            knowledge_data = []
-    else:
-        knowledge_data = []
+            pass
+    historico.append(registo)
+    with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
+        json.dump(historico, f, ensure_ascii=False, indent=2)
 
-    knowledge_embeddings = np.array([item["embedding"] for item in knowledge_data]) if knowledge_data else np.array([])
-    knowledge_perguntas = [item["pergunta"] for item in knowledge_data]
+# API Key
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+elif os.getenv("OPENAI_API_KEY"):
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+else:
+    st.warning("⚠️ A chave da API não está definida.")
 
-    return knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings
+# Interface
+base_conhecimento = carregar_base_conhecimento()
+perguntas_existentes = sorted({p["pergunta"] for p in base_conhecimento})
 
-knowledge_base, knowledge_data, knowledge_perguntas, knowledge_embeddings = carregar_dados()
+col1, col2 = st.columns(2)
+with col1:
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta frequente:", [""] + perguntas_existentes)
+with col2:
+    pergunta_manual = st.text_input("Ou escreva a sua pergunta:")
 
-def get_embedding(text):
-    response = openai.embeddings.create(model="text-embedding-3-small", input=text)
-    return np.array(response.data[0].embedding).reshape(1, -1)
+pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
-def gerar_resposta(pergunta_utilizador, threshold=0.8):
+resposta = ""
+if pergunta_final:
+    with st.spinner("A pensar..."):
+        resposta = gerar_resposta(pergunta_final)
+        guardar_pergunta_no_historico(pergunta_final)
+
+if resposta:
+    st.markdown("---")
+    st.subheader("💡 Resposta do assistente")
+    st.markdown(resposta, unsafe_allow_html=True)
+
+# Upload de novas perguntas
+st.markdown("---")
+st.subheader("📤 Atualizar base de conhecimento")
+novo_json = st.file_uploader("Carregar ficheiro JSON com novas perguntas", type="json")
+if novo_json:
     try:
-        for item in knowledge_base:
-            if item["pergunta"].strip().lower() == pergunta_utilizador.strip().lower():
-                resposta = item["resposta"]
-                if item.get("email"):
-                    resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-                modelo = item.get("modelo_email", "")
-                if modelo and modelo.strip():
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo.strip()}\n```"
-                return resposta + "\n\n(Fonte: Base de conhecimento, correspondência exata)"
-
-        embedding_utilizador = get_embedding(pergunta_utilizador)
-
-        if len(knowledge_embeddings) > 0:
-            sims = cosine_similarity(embedding_utilizador, knowledge_embeddings)[0]
-            max_sim = np.max(sims)
-            if max_sim >= threshold:
-                idx = int(np.argmax(sims))
-                item = knowledge_data[idx]
-                resposta = item["resposta"]
-                if item.get("email"):
-                    resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-                modelo = item.get("modelo_email", "")
-                if modelo and modelo.strip():
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo.strip()}\n```"
-                return resposta + f"\n\n(Fonte: Base de conhecimento, similaridade: {max_sim:.2f})"
-
-        return "❓ Não foi possível encontrar uma resposta adequada na base de conhecimento."
+        novas_perguntas = json.load(novo_json)
+        if isinstance(novas_perguntas, list):
+            base_existente = carregar_base_conhecimento()
+            todas = {p["pergunta"]: p for p in base_existente}
+            for nova in novas_perguntas:
+                todas[nova["pergunta"]] = nova
+            with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
+                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+            gerar_embeddings()  # Atualiza embeddings
+            st.success("✅ Base de conhecimento atualizada.")
+            st.rerun()
+        else:
+            st.error("❌ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
-        return f"❌ Erro ao gerar resposta: {str(e)}"
+        st.error(f"❌ Erro ao ler ficheiro: {e}")
+
+# Rodapé
+st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
