@@ -213,7 +213,7 @@ if novo_json:
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()  # Atualizar embeddings
             st.success("✅ Base de conhecimento atualizada.")
-            st.experimental_rerun()  # Refresh para atualizar dropdown
+            st.rerun()  # Refresh para atualizar dropdown
         else:
             st.error("⚠️ O ficheiro JSON deve conter uma lista de perguntas.")
     except Exception as e:
@@ -239,7 +239,7 @@ with st.expander("➕ Adicionar nova pergunta manualmente"):
                 json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
             gerar_embeddings()  # Atualizar embeddings
             st.success("✅ Pergunta adicionada com sucesso.")
-            st.experimental_rerun()  # Refresh para atualizar dropdown
+            st.rerun()  # Refresh para atualizar dropdown
         else:
             st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
 
