@@ -78,7 +78,7 @@ with st.expander("➕ Inserir nova pergunta"):
         else:
             guardar_nova_pergunta(nova_pergunta, nova_resposta, novo_email, modelo_email)
             st.success("✅ Pergunta adicionada com sucesso.")
-            st.experimental_rerun()
+            st.rerun() 
 
 st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
