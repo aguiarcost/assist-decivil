@@ -17,6 +17,7 @@ st.markdown("""
     .titulo-container img { width: 70px; height: auto; }
     .titulo-container h1 { color: #ef6c00; font-size: 2em; margin: 0; }
     .footer { text-align: center; color: gray; margin-top: 50px; }
+    .spacer { margin: 50px 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -59,18 +60,23 @@ if resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
     st.markdown(resposta, unsafe_allow_html=True)
+    st.markdown('<div class="spacer"></div>', unsafe_allow_html=True)  # Espaçamento visual
 
+# Inserção manual protegida por password
 with st.expander("➕ Inserir nova pergunta"):
     nova_pergunta = st.text_input("Nova pergunta")
     nova_resposta = st.text_area("Resposta à pergunta")
+    novo_email = st.text_input("Email de contacto (opcional)")
+    modelo_email = st.text_area("Modelo de email sugerido (opcional)")
     password = st.text_input("Password de administrador", type="password")
+
     if st.button("Guardar nova pergunta"):
         if password != PASSWORD_ADMIN:
             st.error("⚠️ Password incorreta.")
         elif not nova_pergunta or not nova_resposta:
-            st.warning("⚠️ Preencha todos os campos obrigatórios.")
+            st.warning("⚠️ Preencha a pergunta e a resposta.")
         else:
-            guardar_nova_pergunta(nova_pergunta, nova_resposta)
+            guardar_nova_pergunta(nova_pergunta, nova_resposta, novo_email, modelo_email)
             st.success("✅ Pergunta adicionada com sucesso.")
             st.experimental_rerun()
 
