@@ -18,52 +18,51 @@
     "modelo_email": "Assunto: Pedido de apoio informático\n\nBoa tarde,\n\nSolicito apoio informático relativamente a [descrever o problema e localização do gabinete].\n\nCom os melhores cumprimentos,\n[Seu nome]"
   },
   {
-    "pergunta": "Como pedir acesso Wi-Fi para reuniões?",
-    "resposta": "O acesso Wi-Fi temporário para reuniões deve ser solicitado à DSI.",
-    "email": "dsi@tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Acesso Wi-Fi temporário\n\nExmos. Senhores,\n\nSolicito o acesso Wi-Fi temporário para a reunião agendada no dia [data], com participantes externos.\n\nNome:[nome reunião]\n\nData:[dia(s)da reunião]\n\nUsername:[acrónimo]\n\nextensão:[número extensão]\n\nCom os melhores cumprimentos,\n[Seu nome]"
-  },
-  {
     "pergunta": "Como registar um convidado no sistema informático?",
-    "resposta": "O registo de convidados é feito online através da página do SI do Técnico. Aceda a: https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/",
+    "resposta": "Para registar um convidado no sistema informático, deve aceder ao sistema com as devidas credenciais de administrador e inserir os dados do convidado no formulário apropriado.",
     "email": "",
     "modelo_email": ""
   },
   {
-    "pergunta": "Como comunicar uma avaria no telefone?",
-    "resposta": "As avarias em telefones devem ser comunicadas ao Núcleo de Comunicações.",
-    "email": "nucleo.comunicacoes@tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Avaria no telefone\n\nExmos. Senhores,\n\nVenho por este meio reportar uma avaria no telefone [número ou localização], que se encontra [descrição da avaria].\n\nCom os melhores cumprimentos,\n[Seu nome]"
-  },
-  {
-    "pergunta": "Como pedir uma declaração à DRH?",
-    "resposta": "As declarações devem ser pedidas diretamente ao Núcleo de Declarações da DRH.",
-    "email": "nudi.declaracoes@drh.tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Pedido de declaração\n\nExmos. Senhores,\n\nVenho por este meio solicitar uma declaração relativa a [especificar o conteúdo da declaração].\n\nCom os melhores cumprimentos,\n[Seu nome]"
-  },
-  {
     "pergunta": "Como posso fazer fotocópias de exames?",
-    "resposta": "As fotocópias de exames devem ser realizadas preferencialmente na reprografia. Em casos de impossibilidade, o próprio docente poderá fazer as cópias. Para utilizar os serviços da reprografia, é necessário solicitar uma requisição interna ao secretariado da AC. Os pedidos de cópias devem ser entregues por qualquer docente na reprografia com 24 horas de antecedência, no mínimo.",
+    "resposta": "As fotocópias de exames devem ser solicitadas ao pessoal administrativo do DECivil com a devida antecedência.",
     "email": "",
     "modelo_email": ""
   },
   {
     "pergunta": "Como pedir férias?",
-    "resposta": "As férias devem ser solicitadas através de formulário próprio, disponível em https://drh.tecnico.ulisboa.pt/docentes/formularios/. Após preenchido e assinado, o formulário deve ser entregue ao secretariado da AC, que se dará seguimento ao processo.",
+    "resposta": "As férias devem ser pedidas via portal interno da DRH.",
     "email": "",
     "modelo_email": ""
   },
   {
     "pergunta": "Como entregar despesas para reembolso/fundo de maneio?",
-    "resposta": "As despesas para reembolso ou fundo de maneio devem ser agrafadas (sem sobreposição) a uma folha A4, acompanhadas da respetiva fundamentação.\n\nNo caso de despesas com transportes, é obrigatório indicar o itinerário percorrido.\n\nAs despesas de alimentação devem referir o nome dos partipantes e respetivo número mecanográfico se se tratar de um docente do IST. Limite: 25€/pessoa",
+    "resposta": "As despesas para reembolso ou fundo de maneio devem ser entregues no gabinete de contabilidade do DECivil, acompanhadas dos respetivos comprovativos.",
     "email": "",
     "modelo_email": ""
   },
   {
     "pergunta": "Como retificar notas ou lançar notas fora de prazo?",
-    "resposta": "Os pedidos de retificação de notas ou de lançamento de notas fora de prazo devem ser efetuados através dos formulários disponíveis em: https://graduacao.tecnico.ulisboa.pt/formularios/\n\nApós o preenchimento e assinatura, o formulário deve ser enviado ao secretariado da AC, que dará seguimento ao assunto.",
+    "resposta": "A retificação de notas ou lançamento de notas fora de prazo requer autorização do conselho científico e deve ser feita através do sistema Fénix, seguindo as orientações da secretaria escolar.",
+    "email": "",
+    "modelo_email": ""
+  },
+  {
+    "pergunta": "Como submeter justificações de falta?",
+    "resposta": "As justificações de falta devem ser submetidas através do portal académico ou entregues presencialmente na secretaria, juntamente com os documentos comprovativos.",
+    "email": "secretaria@tecnico.ulisboa.pt",
+    "modelo_email": "Assunto: Justificação de falta\n\nExmos. Senhores,\n\nVenho por este meio apresentar a justificação de falta referente a [disciplina/atividade] ocorrida em [data da falta], conforme documento em anexo.\n\nCom os melhores cumprimentos,\n[Seu nome]"
+  },
+  {
+    "pergunta": "Como obter declarações (comprovativos de matrícula, conclusão de curso, etc)?",
+    "resposta": "As declarações (como comprovativos de matrícula ou conclusão) podem ser solicitadas através do Fénix ou diretamente na secretaria, indicando o tipo de declaração necessária.",
+    "email": "",
+    "modelo_email": ""
+  },
+  {
+    "pergunta": "Onde posso consultar os horários das aulas?",
+    "resposta": "Os horários das aulas estão disponíveis no portal académico (Fénix) e nos placares informativos à entrada do departamento.",
     "email": "",
     "modelo_email": ""
   }
 ]
-
