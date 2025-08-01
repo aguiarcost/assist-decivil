@@ -1,41 +1,44 @@
-import openai
 import os
 import json
+import openai
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Caminhos dos ficheiros
+# Caminho da base de conhecimento
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
 
-# Chave da API da OpenAI (via variável de ambiente)
+# API Key via variável de ambiente
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Carregar a base de conhecimento do ficheiro
+# ----- Funções utilitárias -----
+
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8-sig") as f:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
             return []
     return []
 
-# Guardar a base de conhecimento atualizada no ficheiro
 def guardar_base_conhecimento(base):
     with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
         json.dump(base, f, ensure_ascii=False, indent=2)
 
-# Gerar embedding a partir do texto
-def get_embedding(text):
+def get_embedding(texto):
     try:
-        response = openai.embeddings.create(model="text-embedding-3-small", input=text)
+        response = openai.embeddings.create(
+            input=texto,
+            model="text-embedding-3-small"
+        )
         return np.array(response.data[0].embedding).reshape(1, -1)
     except Exception as e:
-        print(f"❌ Erro a gerar embedding para: {text}\n{e}")
+        print(f"Erro ao gerar embedding para: {texto}")
+        print(str(e))
         return None
 
-# Gerar resposta a partir da pergunta do utilizador
+# ----- Função principal de resposta -----
+
 def gerar_resposta(pergunta_utilizador, threshold=0.8):
     knowledge_base = carregar_base_conhecimento()
 
@@ -46,7 +49,7 @@ def gerar_resposta(pergunta_utilizador, threshold=0.8):
                 resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
             if item.get("modelo_email"):
                 resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
-            return resposta + "\n\n(Fonte: Base de conhecimento - correspondência exata)"
+            return resposta
 
     # Se não encontrou exata, tenta por similaridade
     embeddings_existentes = []
@@ -76,6 +79,28 @@ def gerar_resposta(pergunta_utilizador, threshold=0.8):
             resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
         if item.get("modelo_email"):
             resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
-        return resposta + f"\n\n(Fonte: Base de conhecimento - similaridade {score:.2f})"
+        return resposta
 
     return "❓ Não foi possível encontrar uma resposta relevante na base de conhecimento."
+
+# ----- Edição e remoção -----
+
+def editar_pergunta(pergunta_antiga, nova_pergunta, nova_resposta, novo_email=None, novo_modelo=None):
+    base = carregar_base_conhecimento()
+    nova_base = []
+    for item in base:
+        if item["pergunta"] == pergunta_antiga:
+            nova_base.append({
+                "pergunta": nova_pergunta,
+                "resposta": nova_resposta,
+                "email": novo_email,
+                "modelo_email": novo_modelo
+            })
+        else:
+            nova_base.append(item)
+    guardar_base_conhecimento(nova_base)
+
+def apagar_pergunta(pergunta_a_apagar):
+    base = carregar_base_conhecimento()
+    nova_base = [item for item in base if item["pergunta"] != pergunta_a_apagar]
+    guardar_base_conhecimento(nova_base)
