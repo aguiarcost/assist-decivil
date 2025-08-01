@@ -57,13 +57,7 @@ perguntas = sorted([p["pergunta"] for p in base_conhecimento])
 
 # Interface principal
 st.subheader("❓ Fazer uma pergunta")
-col1, col2 = st.columns(2)
-with col1:
-    pergunta_dropdown = st.selectbox("Escolha uma pergunta:", [""] + perguntas, key="dropdown")
-with col2:
-    pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
-
-pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
+pergunta_final = st.selectbox("Escolha uma pergunta:", [""] + perguntas)
 
 resposta = ""
 if pergunta_final:
