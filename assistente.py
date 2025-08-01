@@ -48,7 +48,7 @@ def gerar_resposta(pergunta_utilizador, threshold=0.8):
             if item.get("email"):
                 resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
             if item.get("modelo_email"):
-                resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
+                resposta += f"\n\n📧 <strong>Modelo de email sugerido:</strong><br><pre>{modelo}</pre>"
             return resposta
 
     # Se não encontrou exata, tenta por similaridade
