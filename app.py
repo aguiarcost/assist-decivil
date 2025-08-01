@@ -1,16 +1,19 @@
 import streamlit as st
 import json
-import os
 from datetime import datetime
-from assistente import gerar_resposta, carregar_base_conhecimento, guardar_base_conhecimento
+from assistente import (
+    gerar_resposta,
+    carregar_base_conhecimento,
+    guardar_base_conhecimento,
+    editar_pergunta,
+    apagar_pergunta,
+)
 
-# Caminhos
-CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_HISTORICO = "historico_perguntas.json"
-PASSWORD_ADMIN = "decivil2024"
+# Constantes
+PASSWORD_CORRETA = "decivil2024"
 
-# Layout da página
-st.set_page_config(page_title="Felisberto — Assistente ACSUTA", layout="wide")
+# Configuração da página
+st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
 st.markdown("""
     <style>
@@ -21,6 +24,7 @@ st.markdown("""
         display: flex;
         align-items: center;
         gap: 10px;
+        margin-top: 10px;
         margin-bottom: 30px;
     }
     .titulo-container img {
@@ -35,10 +39,7 @@ st.markdown("""
     .footer {
         text-align: center;
         color: gray;
-        margin-top: 50px;
-    }
-    .spacer {
-        margin-top: 50px;
+        margin-top: 80px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -50,65 +51,95 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Função auxiliar
-def guardar_pergunta_no_historico(pergunta):
-    registo = {"pergunta": pergunta, "timestamp": datetime.now().isoformat()}
-    if os.path.exists(CAMINHO_HISTORICO):
-        try:
-            with open(CAMINHO_HISTORICO, "r", encoding="utf-8") as f:
-                historico = json.load(f)
-        except json.JSONDecodeError:
-            historico = []
-    else:
-        historico = []
-    historico.append(registo)
-    with open(CAMINHO_HISTORICO, "w", encoding="utf-8") as f:
-        json.dump(historico, f, ensure_ascii=False, indent=2)
-
 # Carregar base
 base_conhecimento = carregar_base_conhecimento()
-perguntas = sorted(p["pergunta"] for p in base_conhecimento)
+perguntas = sorted([p["pergunta"] for p in base_conhecimento])
 
-# Interface de seleção
-pergunta_escolhida = st.selectbox("❓ Escolha uma pergunta", [""] + perguntas)
+# Interface principal
+st.subheader("❓ Fazer uma pergunta")
+col1, col2 = st.columns(2)
+with col1:
+    pergunta_dropdown = st.selectbox("Escolha uma pergunta:", [""] + perguntas, key="dropdown")
+with col2:
+    pergunta_manual = st.text_input("Ou escreva a sua pergunta:", key="manual")
+
+pergunta_final = pergunta_manual.strip() if pergunta_manual.strip() else pergunta_dropdown
 
 resposta = ""
-if pergunta_escolhida:
+if pergunta_final:
     with st.spinner("A pensar..."):
-        resposta = gerar_resposta(pergunta_escolhida)
-        guardar_pergunta_no_historico(pergunta_escolhida)
+        resposta = gerar_resposta(pergunta_final)
 
 if resposta:
     st.markdown("---")
     st.subheader("💡 Resposta do assistente")
-    st.markdown(resposta, unsafe_allow_html=True)
+    st.markdown(f"<div style='margin-bottom: 40px;'>{resposta}</div>", unsafe_allow_html=True)
 
-# Espaço visual
-st.markdown('<div class="spacer"></div>', unsafe_allow_html=True)
+# Inserir nova pergunta
+st.markdown("---")
+if st.button("➕ Inserir nova pergunta"):
+    st.session_state.mostrar_formulario = True
 
-# Expander para inserir nova pergunta
-with st.expander("➕ Inserir nova pergunta manualmente"):
-    nova_pergunta = st.text_input("Nova pergunta")
-    nova_resposta = st.text_area("Resposta à pergunta")
-    novo_email = st.text_input("Email (opcional)")
-    novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
-    password = st.text_input("Palavra-passe de edição", type="password")
+if st.session_state.get("mostrar_formulario"):
+    st.subheader("Adicionar nova pergunta")
+    with st.form("form_nova"):
+        nova_pergunta = st.text_input("Pergunta")
+        nova_resposta = st.text_area("Resposta")
+        novo_email = st.text_input("Email de contacto (opcional)")
+        novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
+        password = st.text_input("Password de segurança", type="password")
+        submitted = st.form_submit_button("Guardar")
+        if submitted:
+            if password != PASSWORD_CORRETA:
+                st.error("⚠️ Password incorreta.")
+            elif not nova_pergunta or not nova_resposta:
+                st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
+            else:
+                base = carregar_base_conhecimento()
+                todas = {p["pergunta"]: p for p in base}
+                todas[nova_pergunta] = {
+                    "pergunta": nova_pergunta,
+                    "resposta": nova_resposta,
+                    "email": novo_email,
+                    "modelo_email": novo_modelo,
+                }
+                guardar_base_conhecimento(list(todas.values()))
+                st.success("✅ Pergunta adicionada com sucesso.")
+                st.session_state.mostrar_formulario = False
+                st.rerun()
 
-    if st.button("Guardar pergunta"):
-        if not nova_pergunta or not nova_resposta:
-            st.warning("⚠️ A pergunta e a resposta são obrigatórias.")
-        elif password != PASSWORD_ADMIN:
-            st.error("❌ Palavra-passe incorreta.")
-        else:
-            perguntas_existentes = {p["pergunta"]: p for p in base_conhecimento}
-            perguntas_existentes[nova_pergunta] = {
-                "pergunta": nova_pergunta,
-                "resposta": nova_resposta,
-                "email": novo_email.strip(),
-                "modelo_email": novo_modelo.strip()
-            }
-            guardar_base_conhecimento(list(perguntas_existentes.values()))
-            st.success("✅ Nova pergunta adicionada com sucesso. Atualize a página para ver no menu.")
+# Edição e eliminação
+st.markdown("---")
+with st.expander("🛠️ Editar ou remover perguntas existentes"):
+    for item in base_conhecimento:
+        with st.expander(f"✏️ {item['pergunta']}"):
+            with st.form(f"edit_{item['pergunta']}"):
+                nova_pergunta = st.text_input("Pergunta", value=item["pergunta"])
+                nova_resposta = st.text_area("Resposta", value=item["resposta"])
+                novo_email = st.text_input("Email", value=item.get("email", ""))
+                novo_modelo = st.text_area("Modelo de email", value=item.get("modelo_email", ""))
+                password = st.text_input("Password", type="password")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    atualizar = st.form_submit_button("💾 Atualizar")
+                with col_b:
+                    eliminar = st.form_submit_button("🗑️ Apagar")
 
-st.markdown("<hr>", unsafe_allow_html=True)
+                if atualizar:
+                    if password != PASSWORD_CORRETA:
+                        st.error("❌ Password incorreta.")
+                    else:
+                        editar_pergunta(item["pergunta"], nova_pergunta, nova_resposta, novo_email, novo_modelo)
+                        st.success("✅ Pergunta atualizada.")
+                        st.rerun()
+                elif eliminar:
+                    if password != PASSWORD_CORRETA:
+                        st.error("❌ Password incorreta.")
+                    else:
+                        apagar_pergunta(item["pergunta"])
+                        st.success("✅ Pergunta removida.")
+                        st.rerun()
+
+# Rodapé
+st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
 st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
