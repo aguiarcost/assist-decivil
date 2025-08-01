@@ -3,36 +3,27 @@ import os
 
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 
-def gerar_resposta(pergunta):
+def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-            base = json.load(f)
-            for item in base:
-                if item["pergunta"].strip().lower() == pergunta.strip().lower():
-                    resposta = item["resposta"].strip()
-                    detalhes = ""
-                    if item.get("email"):
-                        detalhes += f"\n\n📫 **Email de contacto:** {item['email'].strip()}"
-                    if item.get("modelo_email"):
-                        detalhes += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email'].strip()}\n```"
-                    return resposta + detalhes
-    return "❓ Não foi possível encontrar uma resposta para a pergunta selecionada."
+        try:
+            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return []
+    return []
 
-def guardar_nova_pergunta(pergunta, resposta, email="", modelo_email=""):
-    base = []
-    if os.path.exists(CAMINHO_CONHECIMENTO):
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-            try:
-                base = json.load(f)
-            except json.JSONDecodeError:
-                base = []
-
-    base.append({
-        "pergunta": pergunta.strip(),
-        "resposta": resposta.strip(),
-        "email": email.strip(),
-        "modelo_email": modelo_email.strip()
-    })
-
+def guardar_base_conhecimento(lista_perguntas):
     with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-        json.dump(base, f, ensure_ascii=False, indent=2)
+        json.dump(lista_perguntas, f, ensure_ascii=False, indent=2)
+
+def gerar_resposta(pergunta):
+    base = carregar_base_conhecimento()
+    for item in base:
+        if item["pergunta"].strip().lower() == pergunta.strip().lower():
+            resposta = item.get("resposta", "")
+            if item.get("email"):
+                resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
+            if item.get("modelo_email"):
+                resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
+            return resposta + "\n\n(Fonte: Base de conhecimento)"
+    return "❓ Não foi possível encontrar uma resposta correspondente."
