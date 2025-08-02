@@ -52,11 +52,16 @@ if pergunta_selecionada:
 
 # Formulário de inserção/edição
 with st.expander("➕ Inserir nova ou editar pergunta"):
-    st.markdown("Preencha os dados abaixo. Se a pergunta já existir, será atualizada.")
-    pergunta_nova = st.text_input("Pergunta", key="nova_pergunta")
-    resposta_nova = st.text_area("Resposta", key="nova_resposta")
-    email_novo = st.text_input("Email de contacto (opcional)", key="novo_email")
-    modelo_novo = st.text_area("Modelo de email sugerido (opcional)", key="modelo_novo")
+    st.markdown("Selecione uma pergunta para editar ou crie uma nova.")
+
+    pergunta_a_editar = st.selectbox("Pergunta existente (para editar)", [""] + perguntas_disponiveis, key="editar_select")
+
+    dados_edicao = next((p for p in base if p["pergunta"] == pergunta_a_editar), {}) if pergunta_a_editar else {}
+
+    pergunta_nova = st.text_input("Pergunta", value=dados_edicao.get("pergunta", ""), key="nova_pergunta")
+    resposta_nova = st.text_area("Resposta", value=dados_edicao.get("resposta", ""), key="nova_resposta")
+    email_novo = st.text_input("Email de contacto (opcional)", value=dados_edicao.get("email", ""), key="novo_email")
+    modelo_novo = st.text_area("Modelo de email sugerido (opcional)", value=dados_edicao.get("modelo_email", ""), key="modelo_novo")
     password = st.text_input("Password para guardar", type="password")
 
     if st.button("Guardar pergunta"):
