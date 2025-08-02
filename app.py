@@ -4,72 +4,66 @@ from assistente import (
     carregar_perguntas,
     adicionar_pergunta,
     atualizar_pergunta,
-    ADMIN_PASSWORD
 )
+import os
 
-st.set_page_config(page_title="Felisberto - Assistente Administrativo", layout="wide")
+st.set_page_config("Felisberto - Assistente Administrativo", layout="centered")
 
-st.title("📘 Felisberto - Assistente Administrativo")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
-# Carregar perguntas da base de dados (Supabase)
-perguntas_data = carregar_perguntas()
-perguntas_existentes = sorted([p["pergunta"] for p in perguntas_data])
+st.markdown("# 🤖 Felisberto, Assistente Administrativo")
+st.markdown("Faça uma pergunta ou selecione uma das existentes:")
 
-# Interface de seleção de pergunta
-pergunta_selecionada = st.selectbox("Escolha uma pergunta:", [""] + perguntas_existentes)
+# Mostrar perguntas no dropdown
+perguntas_existentes = [p["pergunta"] for p in carregar_perguntas()]
+pergunta_selecionada = st.selectbox("Perguntas frequentes", [""] + perguntas_existentes)
 
-# Mostrar resposta se houver pergunta selecionada
+resposta = ""
 if pergunta_selecionada:
     resposta = gerar_resposta(pergunta_selecionada)
-    if resposta:
-        st.markdown("---")
-        st.markdown(f"**Resposta:**\n\n{resposta}", unsafe_allow_html=True)
 
-# Expansor para adicionar nova pergunta
-with st.expander("➕ Inserir nova pergunta manualmente"):
-    with st.form("form_nova_pergunta"):
+if resposta:
+    st.markdown("## 💡 Resposta")
+    st.markdown(resposta, unsafe_allow_html=True)
+    st.markdown("---")
+
+# Espaçamento entre resposta e inserção
+st.markdown("")
+
+# Inserção ou edição de pergunta (com password)
+with st.expander("➕ Inserir ou editar pergunta"):
+    modo = st.radio("Modo", ["Nova pergunta", "Editar pergunta"], horizontal=True)
+    if modo == "Nova pergunta":
         nova_pergunta = st.text_input("Pergunta")
         nova_resposta = st.text_area("Resposta")
         novo_email = st.text_input("Email de contacto (opcional)")
-        novo_modelo_email = st.text_area("Modelo de email sugerido (opcional)")
-        password = st.text_input("Password de administrador", type="password")
-        submitted = st.form_submit_button("Guardar pergunta")
-    
-    if submitted:
-        if password != ADMIN_PASSWORD:
-            st.error("❌ Password incorreta.")
-        elif not nova_pergunta or not nova_resposta:
-            st.error("❗ A pergunta e a resposta são obrigatórias.")
-        else:
-            sucesso = adicionar_pergunta(nova_pergunta, nova_resposta, novo_email, novo_modelo_email)
-            if sucesso:
-                st.success("✅ Pergunta adicionada com sucesso.")
-                st.rerun()
-            else:
-                st.error("❌ Erro ao adicionar pergunta (pode já existir).")
-
-# Expansor para editar perguntas
-with st.expander("✏️ Editar pergunta existente"):
-    pergunta_editar = st.selectbox("Selecionar pergunta para editar", [""] + perguntas_existentes, key="edit_select")
-    if pergunta_editar:
-        dados = next((p for p in perguntas_data if p["pergunta"] == pergunta_editar), None)
-        if dados:
-            with st.form("form_editar_pergunta"):
-                nova_resposta_editar = st.text_area("Editar resposta", value=dados.get("resposta", ""))
-                novo_email_editar = st.text_input("Editar email (opcional)", value=dados.get("email", ""))
-                novo_modelo_editar = st.text_area("Editar modelo de email (opcional)", value=dados.get("modelo_email", ""))
-                password_edit = st.text_input("Password de administrador", type="password", key="edit_pass")
-                confirmar = st.form_submit_button("Atualizar pergunta")
-            
-            if confirmar:
-                if password_edit != ADMIN_PASSWORD:
-                    st.error("❌ Password incorreta.")
-                else:
-                    sucesso = atualizar_pergunta(
-                        pergunta_editar, nova_resposta_editar, novo_email_editar, novo_modelo_editar
-                    )
+        novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
+        form_password = st.text_input("Password de administrador", type="password")
+        if st.button("Guardar nova pergunta"):
+            if form_password == ADMIN_PASSWORD:
+                if nova_pergunta and nova_resposta:
+                    sucesso = adicionar_pergunta(nova_pergunta, nova_resposta, novo_email, novo_modelo)
                     if sucesso:
-                        st.success("✅ Pergunta atualizada com sucesso.")
+                        st.success("✅ Pergunta adicionada com sucesso.")
                         st.rerun()
                     else:
-                        st.error("❌ Erro ao atualizar pergunta.")
+                        st.warning("⚠️ Esta pergunta já existe.")
+                else:
+                    st.warning("⚠️ Preencha a pergunta e a resposta.")
+            else:
+                st.error("🔒 Password incorreta.")
+
+    else:
+        pergunta_a_editar = st.selectbox("Selecionar pergunta para editar", perguntas_existentes)
+        pergunta_original = next(p for p in carregar_perguntas() if p["pergunta"] == pergunta_a_editar)
+        nova_resposta = st.text_area("Nova resposta", value=pergunta_original["resposta"])
+        novo_email = st.text_input("Novo email (opcional)", value=pergunta_original.get("email", ""))
+        novo_modelo = st.text_area("Novo modelo de email (opcional)", value=pergunta_original.get("modelo_email", ""))
+        form_password = st.text_input("Password de administrador", type="password")
+        if st.button("Atualizar pergunta"):
+            if form_password == ADMIN_PASSWORD:
+                atualizar_pergunta(pergunta_a_editar, nova_resposta, novo_email, novo_modelo)
+                st.success("✅ Pergunta atualizada com sucesso.")
+                st.rerun()
+            else:
+                st.error("🔒 Password incorreta.")
