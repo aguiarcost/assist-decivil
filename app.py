@@ -4,8 +4,8 @@ from datetime import datetime
 import os
 
 # Configurações Supabase
-SUPABASE_URL = "https://shphlpyzasvylrosamid.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocGhscHl6YXN2eWxyb3NhbWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQxNzI2MzAsImV4cCI6MjA2OTc0ODYzMH0.layrRm6BnmiQDwKg6HwGdCh6LaEN31gM7aMETodxrrQ"
+SUPABASE_URL = st.secrets["supabase"]["url"]
+SUPABASE_KEY = st.secrets["supabase"]["key"]
 PASSWORD_ADMIN = "decivil2024"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
