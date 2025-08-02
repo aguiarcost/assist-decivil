@@ -1,33 +1,39 @@
-import openai
 import os
 import json
+import openai
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from supabase import create_client
 
-# --- Caminhos ---
-CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_EMBEDDINGS = "base_knowledge_vector.json"
-
-# --- API Key ---
+# Configurações de API
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# --- Função: Carregar base de conhecimento ---
+# Supabase
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ---------- Carregar dados da base de conhecimento ----------
 def carregar_base_conhecimento():
-    if os.path.exists(CAMINHO_CONHECIMENTO):
-        try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return []
+    try:
+        response = supabase.table("conhecimento").select("*").execute()
+        if response.data:
+            return response.data
+    except Exception as e:
+        print(f"❌ Erro ao carregar base de conhecimento: {e}")
     return []
 
-# --- Função: Guardar base de conhecimento ---
-def guardar_base_conhecimento(nova_base):
-    with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-        json.dump(nova_base, f, ensure_ascii=False, indent=2)
+def guardar_base_conhecimento(lista):
+    try:
+        # Limpa a tabela e reescreve tudo
+        supabase.table("conhecimento").delete().neq("pergunta", "").execute()
+        for item in lista:
+            supabase.table("conhecimento").insert(item).execute()
+    except Exception as e:
+        print(f"❌ Erro ao guardar base de conhecimento: {e}")
 
-# --- Função: Gerar embedding OpenAI ---
-def get_embedding(texto):
+# ---------- Embeddings ----------
+def gerar_embedding(texto):
     try:
         response = openai.embeddings.create(
             model="text-embedding-3-small",
@@ -35,68 +41,67 @@ def get_embedding(texto):
         )
         return response.data[0].embedding
     except Exception as e:
-        print(f"❌ Erro a gerar embedding: {e}")
+        print(f"❌ Erro ao gerar embedding para: {texto}\n{e}")
         return None
 
-# --- Função: Gerar embedding de nova pergunta e atualizar ficheiro ---
-def gerar_embedding(pergunta, resposta, email="", modelo_email=""):
-    if not pergunta:
-        return
-    embedding = get_embedding(pergunta)
-    if embedding is None:
-        return
-    nova_entrada = {
-        "pergunta": pergunta,
-        "embedding": embedding,
-        "resposta": resposta,
-        "email": email,
-        "modelo_email": modelo_email
-    }
+def carregar_embeddings():
+    try:
+        response = supabase.table("conhecimento_vector").select("*").execute()
+        data = response.data or []
+        # Filtrar apenas os que têm embedding válido
+        data = [d for d in data if "embedding" in d and "pergunta" in d]
+        embeddings = np.array([d["embedding"] for d in data])
+        perguntas = [d["pergunta"] for d in data]
+        return data, perguntas, embeddings
+    except Exception as e:
+        print(f"❌ Erro a carregar embeddings: {e}")
+        return [], [], np.array([])
 
-    dados_existentes = []
-    if os.path.exists(CAMINHO_EMBEDDINGS):
-        try:
-            with open(CAMINHO_EMBEDDINGS, "r", encoding="utf-8") as f:
-                dados_existentes = json.load(f)
-        except json.JSONDecodeError:
-            pass
+def guardar_embeddings(lista):
+    try:
+        # Limpa e reinsere todos os embeddings
+        supabase.table("conhecimento_vector").delete().neq("pergunta", "").execute()
+        for item in lista:
+            supabase.table("conhecimento_vector").insert(item).execute()
+    except Exception as e:
+        print(f"❌ Erro ao guardar embeddings: {e}")
 
-    # Remover duplicado da mesma pergunta
-    dados_existentes = [d for d in dados_existentes if d["pergunta"] != pergunta]
-    dados_existentes.append(nova_entrada)
-
-    with open(CAMINHO_EMBEDDINGS, "w", encoding="utf-8") as f:
-        json.dump(dados_existentes, f, ensure_ascii=False, indent=2)
-
-# --- Função: Gerar resposta a partir da base ---
+# ---------- Gerar resposta ----------
 def gerar_resposta(pergunta_utilizador, threshold=0.8):
     try:
-        with open(CAMINHO_EMBEDDINGS, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return "⚠️ Base de conhecimento ainda não tem embeddings."
+        conhecimento = carregar_base_conhecimento()
+        dados, perguntas, embeddings = carregar_embeddings()
 
-    perguntas = [d["pergunta"] for d in data]
-    embeddings = np.array([d["embedding"] for d in data])
+        # Verificar correspondência exata
+        for item in conhecimento:
+            if item["pergunta"].strip().lower() == pergunta_utilizador.strip().lower():
+                resposta = item["resposta"]
+                if item.get("email"):
+                    resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
+                modelo = item.get("modelo_email", "")
+                if modelo:
+                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+                return resposta
 
-    emb_utilizador = get_embedding(pergunta_utilizador)
-    if emb_utilizador is None or len(embeddings) == 0:
-        return "⚠️ Erro a gerar resposta."
+        # Embedding da pergunta
+        embedding_novo = gerar_embedding(pergunta_utilizador)
+        if embedding_novo is None or len(embeddings) == 0:
+            return "❓ Não foi possível encontrar uma resposta adequada."
 
-    emb_utilizador = np.array(emb_utilizador).reshape(1, -1)
-    sims = cosine_similarity(emb_utilizador, embeddings)[0]
+        # Similaridade
+        embedding_novo = np.array(embedding_novo).reshape(1, -1)
+        sims = cosine_similarity(embedding_novo, embeddings)[0]
+        idx = int(np.argmax(sims))
+        if sims[idx] >= threshold:
+            item = dados[idx]
+            resposta = item["resposta"]
+            if item.get("email"):
+                resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
+            modelo = item.get("modelo_email", "")
+            if modelo:
+                resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+            return resposta
 
-    idx_mais_proximo = int(np.argmax(sims))
-    if sims[idx_mais_proximo] < threshold:
-        return "❓ Não encontrei uma resposta adequada na base de conhecimento."
-
-    item = data[idx_mais_proximo]
-    resposta = item["resposta"]
-
-    # Apresentar email e modelo se existirem
-    if item.get("email"):
-        resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-    if item.get("modelo_email"):
-        resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
-
-    return resposta
+        return "❓ Não foi possível encontrar uma resposta adequada."
+    except Exception as e:
+        return f"❌ Erro ao gerar resposta: {str(e)}"
