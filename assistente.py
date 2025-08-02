@@ -8,10 +8,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
 
+# Password de edição
+PASSWORD_CORRETA = os.getenv("APP_EDIT_PASSWORD", "decivil2024")
+
 # Chave da API OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Carregar base de conhecimento
+# Carrega base de conhecimento
 def carregar_base_conhecimento():
     if os.path.exists(CAMINHO_CONHECIMENTO):
         try:
@@ -21,16 +24,12 @@ def carregar_base_conhecimento():
             return []
     return []
 
-# Guardar base de conhecimento
-def guardar_base_conhecimento(nova_pergunta):
-    base = carregar_base_conhecimento()
-    todas = {p["pergunta"]: p for p in base}
-    todas[nova_pergunta["pergunta"]] = nova_pergunta
+# Guarda nova base de conhecimento
+def guardar_base_conhecimento(base):
     with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-        json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
-    atualizar_embeddings()
+        json.dump(base, f, ensure_ascii=False, indent=2)
 
-# Obter embedding
+# Gerar embedding com OpenAI
 def get_embedding(texto):
     try:
         response = openai.embeddings.create(
@@ -42,7 +41,7 @@ def get_embedding(texto):
         print(f"❌ Erro a gerar embedding: {e}")
         return None
 
-# Atualizar embeddings após nova pergunta
+# Atualiza o ficheiro de embeddings
 def atualizar_embeddings():
     base = carregar_base_conhecimento()
     dados = []
@@ -59,7 +58,26 @@ def atualizar_embeddings():
     with open(CAMINHO_KNOWLEDGE_VECTOR, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=2)
 
-# Gerar resposta
+# Adiciona ou edita uma pergunta (com password obrigatória)
+def adicionar_ou_editar_pergunta(pergunta, resposta, email, modelo_email, password):
+    if password != PASSWORD_CORRETA:
+        return False, "❌ Password incorreta. Alterações não foram guardadas."
+
+    base = carregar_base_conhecimento()
+    # Atualizar ou adicionar
+    perguntas_dict = {p["pergunta"]: p for p in base}
+    perguntas_dict[pergunta] = {
+        "pergunta": pergunta,
+        "resposta": resposta,
+        "email": email,
+        "modelo_email": modelo_email
+    }
+    nova_base = list(perguntas_dict.values())
+    guardar_base_conhecimento(nova_base)
+    atualizar_embeddings()
+    return True, "✅ Pergunta guardada com sucesso."
+
+# Gerar resposta à pergunta do utilizador
 def gerar_resposta(pergunta_utilizador, threshold=0.8):
     try:
         with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8") as f:
@@ -85,3 +103,4 @@ def gerar_resposta(pergunta_utilizador, threshold=0.8):
             return "❓ Não foi possível encontrar uma resposta adequada."
     except Exception as e:
         return f"❌ Erro ao gerar resposta: {str(e)}"
+        
