@@ -1,112 +1,54 @@
-import json
 import os
 import openai
+import supabase
+from supabase import create_client
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 
-# Variáveis de ambiente
+# Configurações Supabase
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Configurar OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
-PASSWORD = os.getenv("APP_PASSWORD", "decivil2024")
 
-CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_EMBEDDINGS = "base_knowledge_vector.json"
-
-# === Funções utilitárias ===
-
-def carregar_base_conhecimento():
-    if os.path.exists(CAMINHO_CONHECIMENTO):
-        with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
-    return []
-
-def guardar_base_conhecimento(base):
-    with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-        json.dump(base, f, ensure_ascii=False, indent=2)
-
-def gerar_embedding(texto):
+def listar_perguntas():
     try:
-        resposta = openai.embeddings.create(
-            model="text-embedding-3-small",
-            input=texto
-        )
-        return resposta.data[0].embedding
-    except Exception as e:
-        print(f"Erro a gerar embedding para: {texto}")
-        raise e
+        res = supabase_client.table("perguntas").select("pergunta").execute()
+        return [r["pergunta"] for r in res.data]
+    except:
+        return []
 
-def atualizar_embeddings():
-    base = carregar_base_conhecimento()
-    vetor = []
-    for item in base:
-        try:
-            embedding = gerar_embedding(item["pergunta"])
-            vetor.append({
-                "pergunta": item["pergunta"],
-                "embedding": embedding,
-                "resposta": item.get("resposta", ""),
-                "email": item.get("email", ""),
-                "modelo_email": item.get("modelo_email", "")
-            })
-        except Exception as e:
-            print(f"Erro ao gerar embedding: {e}")
-    with open(CAMINHO_EMBEDDINGS, "w", encoding="utf-8") as f:
-        json.dump(vetor, f, ensure_ascii=False, indent=2)
+def obter_pergunta_por_texto(texto):
+    res = supabase_client.table("perguntas").select("*").eq("pergunta", texto).execute()
+    if res.data:
+        return res.data[0]
+    return None
 
-# === Adicionar ou editar pergunta ===
+def adicionar_ou_atualizar_pergunta(pergunta, resposta, email, modelo_email):
+    existente = obter_pergunta_por_texto(pergunta)
+    if existente:
+        supabase_client.table("perguntas").update({
+            "resposta": resposta,
+            "email": email,
+            "modelo_email": modelo_email
+        }).eq("pergunta", pergunta).execute()
+    else:
+        supabase_client.table("perguntas").insert([{
+            "pergunta": pergunta,
+            "resposta": resposta,
+            "email": email,
+            "modelo_email": modelo_email
+        }]).execute()
 
-def adicionar_ou_editar_pergunta(pergunta, resposta, email, modelo_email, password):
-    if password != PASSWORD:
-        return False, "❌ Password incorreta."
-
-    base = carregar_base_conhecimento()
-    todas = {p["pergunta"]: p for p in base}
-    todas[pergunta] = {
-        "pergunta": pergunta,
-        "resposta": resposta,
-        "email": email,
-        "modelo_email": modelo_email
-    }
-    guardar_base_conhecimento(list(todas.values()))
-    atualizar_embeddings()
-    return True, "✅ Pergunta adicionada ou atualizada com sucesso."
-
-# === Gerar resposta ===
-
-def gerar_resposta(pergunta_utilizador, threshold=0.8):
-    try:
-        base = carregar_base_conhecimento()
-        vetor = []
-
-        if os.path.exists(CAMINHO_EMBEDDINGS):
-            with open(CAMINHO_EMBEDDINGS, "r", encoding="utf-8") as f:
-                try:
-                    vetor = json.load(f)
-                except json.JSONDecodeError:
-                    return "⚠️ Erro ao carregar embeddings."
-        else:
-            return "⚠️ Embeddings não encontrados. Adicione perguntas para começar."
-
-        perguntas = [item["pergunta"] for item in vetor]
-        embeddings = np.array([item["embedding"] for item in vetor])
-        embedding_utilizador = np.array(gerar_embedding(pergunta_utilizador)).reshape(1, -1)
-
-        sims = cosine_similarity(embedding_utilizador, embeddings)[0]
-        idx_max = int(np.argmax(sims))
-        sim_max = sims[idx_max]
-
-        if sim_max < threshold:
-            return "🤔 Não foi encontrada uma resposta suficientemente relevante."
-
-        item = vetor[idx_max]
+def gerar_resposta(pergunta_utilizador):
+    item = obter_pergunta_por_texto(pergunta_utilizador)
+    if item:
         resposta = item["resposta"]
         if item.get("email"):
             resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-        if item.get("modelo_email"):
-            resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
+        modelo = item.get("modelo_email")
+        if modelo:
+            resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo.strip()}\n```"
         return resposta
-
-    except Exception as e:
-        return f"❌ Erro a gerar resposta: {str(e)}"
+    return "❓ Não encontrei resposta para essa pergunta."
