@@ -1,87 +1,99 @@
-# assistente.py (versão com Supabase)
-import openai
 import os
-import json
-import numpy as np
 from supabase import create_client, Client
-from dotenv import load_dotenv
+from openai import OpenAI
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Carregar variáveis de ambiente
-load_dotenv()
+# Secretos
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PASSWORD_CORRETA = os.getenv("ADMIN_PASSWORD", "decivil2024")  # Fallback
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise EnvironmentError("SUPABASE_URL e SUPABASE_KEY devem estar definidos nas secrets ou variáveis de ambiente.")
-
+# Supabase e OpenAI clients
 supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# ------------------------
+# Funções auxiliares
+# ------------------------
 
-# Nome da tabela na Supabase
-TABELA = "perguntas"
+def listar_perguntas():
+    try:
+        data = supabase_client.table("perguntas").select("pergunta").execute().data
+        return sorted([item["pergunta"] for item in data])
+    except Exception:
+        return []
 
-# Função para obter todas as perguntas e respostas
-
-def obter_base_conhecimento():
-    resposta = supabase_client.table(TABELA).select("*").execute()
-    return resposta.data if resposta.data else []
-
-# Função para guardar uma nova pergunta
-
-def guardar_nova_pergunta(pergunta, resposta, email="", modelo_email=""):
-    dados = {
-        "pergunta": pergunta.strip(),
-        "resposta": resposta.strip(),
-        "email": email.strip(),
-        "modelo_email": modelo_email.strip()
-    }
-    supabase_client.table(TABELA).insert(dados).execute()
-
-# Função para atualizar uma pergunta existente
-
-def atualizar_pergunta(id_pergunta, novos_dados):
-    supabase_client.table(TABELA).update(novos_dados).eq("id", id_pergunta).execute()
-
-# Gerar embedding
+def obter_pergunta_por_texto(pergunta_texto):
+    try:
+        data = supabase_client.table("perguntas").select("*").eq("pergunta", pergunta_texto).execute().data
+        return data[0] if data else {}
+    except Exception:
+        return {}
 
 def get_embedding(texto):
-    response = openai.embeddings.create(
-        model="text-embedding-3-small",
-        input=texto
-    )
-    return np.array(response.data[0].embedding)
+    try:
+        response = openai_client.embeddings.create(
+            input=texto,
+            model="text-embedding-3-small"
+        )
+        return np.array(response.data[0].embedding).tolist()
+    except Exception as e:
+        print(f"Erro ao gerar embedding: {e}")
+        return []
 
-# Função principal para responder com base na base de conhecimento
+def gerar_resposta(pergunta_usuario):
+    try:
+        # Busca correspondência exata
+        dados = obter_pergunta_por_texto(pergunta_usuario)
+        if dados:
+            resposta = dados["resposta"]
+            if dados.get("email"):
+                resposta += f"\n\n📫 **Email de contacto:** {dados['email']}"
+            if dados.get("modelo_email"):
+                resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{dados['modelo_email']}\n```"
+            return resposta
 
-def gerar_resposta(pergunta_utilizador, threshold=0.8):
-    base = obter_base_conhecimento()
-    if not base:
-        return "❌ Base de conhecimento vazia."
+        # Caso não encontre, busca por similaridade
+        embedding_pergunta = np.array(get_embedding(pergunta_usuario)).reshape(1, -1)
+        base = supabase_client.table("perguntas").select("*").execute().data
 
-    emb_utilizador = get_embedding(pergunta_utilizador).reshape(1, -1)
-    emb_existentes = [get_embedding(item["pergunta"]) for item in base]
-    emb_array = np.array(emb_existentes)
+        if not base:
+            return "❌ Não existem dados na base de conhecimento."
 
-    from sklearn.metrics.pairwise import cosine_similarity
-    sims = cosine_similarity(emb_utilizador, emb_array)[0]
-    idx = int(np.argmax(sims))
-    if sims[idx] < threshold:
-        return "❓ Não foi possível encontrar uma resposta adequada."
+        embeddings_base = np.array([item["embedding"] for item in base])
+        similaridades = cosine_similarity(embedding_pergunta, embeddings_base)[0]
+        idx_mais_prox = int(np.argmax(similaridades))
 
-    item = base[idx]
-    resposta = item["resposta"]
-    if item.get("email"):
-        resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-    if item.get("modelo_email"):
-        resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email'].strip()}\n```"
-    return resposta
+        item = base[idx_mais_prox]
+        resposta = item["resposta"]
+        if item.get("email"):
+            resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
+        if item.get("modelo_email"):
+            resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
 
-# Função para obter ID de uma pergunta
+        return resposta
+    except Exception as e:
+        return f"❌ Erro ao gerar resposta: {e}"
 
-def obter_id_por_pergunta(texto):
-    base = obter_base_conhecimento()
-    for item in base:
-        if item["pergunta"].strip().lower() == texto.strip().lower():
-            return item["id"], item
-    return None, None
+def inserir_ou_atualizar_pergunta(pergunta, resposta, email="", modelo_email=""):
+    try:
+        embedding = get_embedding(pergunta)
+        existente = obter_pergunta_por_texto(pergunta)
+
+        dados = {
+            "pergunta": pergunta,
+            "resposta": resposta,
+            "email": email,
+            "modelo_email": modelo_email,
+            "embedding": embedding
+        }
+
+        if existente:
+            supabase_client.table("perguntas").update(dados).eq("pergunta", pergunta).execute()
+        else:
+            supabase_client.table("perguntas").insert(dados).execute()
+
+    except Exception as e:
+        print(f"Erro ao guardar pergunta: {e}")
