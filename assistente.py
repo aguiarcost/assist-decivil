@@ -1,54 +1,87 @@
-import os
+# assistente.py (versão com Supabase)
 import openai
-import supabase
-from supabase import create_client
+import os
+import json
 import numpy as np
+from supabase import create_client, Client
+from dotenv import load_dotenv
 
-# Configurações Supabase
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Carregar variáveis de ambiente
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# Configurar OpenAI
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise EnvironmentError("SUPABASE_URL e SUPABASE_KEY devem estar definidos nas secrets ou variáveis de ambiente.")
+
+supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def listar_perguntas():
-    try:
-        res = supabase_client.table("perguntas").select("pergunta").execute()
-        return [r["pergunta"] for r in res.data]
-    except:
-        return []
+# Nome da tabela na Supabase
+TABELA = "perguntas"
 
-def obter_pergunta_por_texto(texto):
-    res = supabase_client.table("perguntas").select("*").eq("pergunta", texto).execute()
-    if res.data:
-        return res.data[0]
-    return None
+# Função para obter todas as perguntas e respostas
 
-def adicionar_ou_atualizar_pergunta(pergunta, resposta, email, modelo_email):
-    existente = obter_pergunta_por_texto(pergunta)
-    if existente:
-        supabase_client.table("perguntas").update({
-            "resposta": resposta,
-            "email": email,
-            "modelo_email": modelo_email
-        }).eq("pergunta", pergunta).execute()
-    else:
-        supabase_client.table("perguntas").insert([{
-            "pergunta": pergunta,
-            "resposta": resposta,
-            "email": email,
-            "modelo_email": modelo_email
-        }]).execute()
+def obter_base_conhecimento():
+    resposta = supabase_client.table(TABELA).select("*").execute()
+    return resposta.data if resposta.data else []
 
-def gerar_resposta(pergunta_utilizador):
-    item = obter_pergunta_por_texto(pergunta_utilizador)
-    if item:
-        resposta = item["resposta"]
-        if item.get("email"):
-            resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-        modelo = item.get("modelo_email")
-        if modelo:
-            resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo.strip()}\n```"
-        return resposta
-    return "❓ Não encontrei resposta para essa pergunta."
+# Função para guardar uma nova pergunta
+
+def guardar_nova_pergunta(pergunta, resposta, email="", modelo_email=""):
+    dados = {
+        "pergunta": pergunta.strip(),
+        "resposta": resposta.strip(),
+        "email": email.strip(),
+        "modelo_email": modelo_email.strip()
+    }
+    supabase_client.table(TABELA).insert(dados).execute()
+
+# Função para atualizar uma pergunta existente
+
+def atualizar_pergunta(id_pergunta, novos_dados):
+    supabase_client.table(TABELA).update(novos_dados).eq("id", id_pergunta).execute()
+
+# Gerar embedding
+
+def get_embedding(texto):
+    response = openai.embeddings.create(
+        model="text-embedding-3-small",
+        input=texto
+    )
+    return np.array(response.data[0].embedding)
+
+# Função principal para responder com base na base de conhecimento
+
+def gerar_resposta(pergunta_utilizador, threshold=0.8):
+    base = obter_base_conhecimento()
+    if not base:
+        return "❌ Base de conhecimento vazia."
+
+    emb_utilizador = get_embedding(pergunta_utilizador).reshape(1, -1)
+    emb_existentes = [get_embedding(item["pergunta"]) for item in base]
+    emb_array = np.array(emb_existentes)
+
+    from sklearn.metrics.pairwise import cosine_similarity
+    sims = cosine_similarity(emb_utilizador, emb_array)[0]
+    idx = int(np.argmax(sims))
+    if sims[idx] < threshold:
+        return "❓ Não foi possível encontrar uma resposta adequada."
+
+    item = base[idx]
+    resposta = item["resposta"]
+    if item.get("email"):
+        resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
+    if item.get("modelo_email"):
+        resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email'].strip()}\n```"
+    return resposta
+
+# Função para obter ID de uma pergunta
+
+def obter_id_por_pergunta(texto):
+    base = obter_base_conhecimento()
+    for item in base:
+        if item["pergunta"].strip().lower() == texto.strip().lower():
+            return item["id"], item
+    return None, None
