@@ -1,134 +1,101 @@
 import streamlit as st
-import json
+from supabase import create_client, Client
+from datetime import datetime
 import os
-from assistente import (
-    gerar_resposta,
-    carregar_base_conhecimento,
-    guardar_base_conhecimento,
-    gerar_embeddings,
-)
 
-# Caminhos dos ficheiros
-CAMINHO_CONHECIMENTO = "base_conhecimento.json"
+# Configurações Supabase
+SUPABASE_URL = "https://shphlpyzasvylrosamid.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocGhscHl6YXN2eWxyb3NhbWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQxNzI2MzAsImV4cCI6MjA2OTc0ODYzMH0.layrRm6BnmiQDwKg6HwGdCh6LaEN31gM7aMETodxrrQ"
+PASSWORD_ADMIN = "decivil2024"
 
-# Página
-st.set_page_config(page_title="Felisberto - Assistente ACSUTA", layout="wide")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-st.markdown("""
-    <style>
-    .stApp { background-color: #fff3e0; }
-    .titulo-container {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-top: 10px;
-        margin-bottom: 30px;
-    }
-    .titulo-container img {
-        width: 70px;
-        height: auto;
-    }
-    .titulo-container h1 {
-        color: #ef6c00;
-        font-size: 2em;
-        margin: 0;
-    }
-    .espaco { margin-top: 40px; margin-bottom: 20px; }
-    .footer {
-        text-align: center;
-        color: gray;
-        margin-top: 60px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Layout da app
+st.set_page_config(page_title="Felisberto – Assistente ACSUTA", layout="wide")
+st.title("🤖 Felisberto – Assistente Administrativo ACSUTA")
 
-st.markdown("""
-    <div class="titulo-container">
-        <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png">
-        <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
-    </div>
-""", unsafe_allow_html=True)
+# Funções Supabase
+def listar_perguntas():
+    resp = supabase.table("perguntas").select("*").order("created_at", desc=False).execute()
+    return resp.data if resp.data else []
 
-# Carregar base de conhecimento
-base = carregar_base_conhecimento()
-perguntas = sorted([item["pergunta"] for item in base])
+def inserir_pergunta(pergunta, resposta, email, modelo):
+    supabase.table("perguntas").insert({
+        "pergunta": pergunta,
+        "resposta": resposta,
+        "email": email,
+        "modelo": modelo,
+        "created_at": datetime.utcnow().isoformat()
+    }).execute()
 
-# Escolher pergunta
-st.subheader("📌 Escolha uma pergunta")
-pergunta_escolhida = st.selectbox("Pergunta:", [""] + perguntas)
+def atualizar_pergunta(id_, resposta, email, modelo):
+    supabase.table("perguntas").update({
+        "resposta": resposta,
+        "email": email,
+        "modelo": modelo
+    }).eq("id", id_).execute()
 
-# Gerar resposta
+def apagar_pergunta(id_):
+    supabase.table("perguntas").delete().eq("id", id_).execute()
+
+# Carregamento das perguntas
+dados = listar_perguntas()
+opcoes = [d["pergunta"] for d in dados]
+
+# Dropdown com perguntas
+pergunta_escolhida = st.selectbox("📌 Escolha uma pergunta:", [""] + opcoes)
 if pergunta_escolhida:
-    with st.spinner("A pensar..."):
-        resposta = gerar_resposta(pergunta_escolhida)
-    st.markdown("---")
-    st.subheader("💡 Resposta do assistente")
-    st.markdown(resposta, unsafe_allow_html=True)
+    item = next((d for d in dados if d["pergunta"] == pergunta_escolhida), None)
+    if item:
+        st.markdown("### 💡 Resposta")
+        st.markdown(item["resposta"])
+        if item.get("email"):
+            st.markdown(f"📫 **Email de contacto:** {item['email']}")
+        if item.get("modelo"):
+            st.markdown("📧 **Modelo de email sugerido:**")
+            st.code(item["modelo"])
 
-# Espaço visual
-st.markdown("<div class='espaco'></div>", unsafe_allow_html=True)
+st.markdown("---")
 
-# Inserir nova pergunta
+# Expander para nova pergunta
 with st.expander("➕ Inserir nova pergunta"):
-    nova_pergunta = st.text_input("Pergunta")
-    nova_resposta = st.text_area("Resposta")
-    novo_email = st.text_input("Email (opcional)")
-    novo_modelo = st.text_area("Modelo de email (opcional)")
-    password = st.text_input("Password para gravar", type="password")
-
-    if st.button("💾 Guardar pergunta"):
-        if password != "decivil2024":
+    nova_p = st.text_input("Pergunta")
+    nova_r = st.text_area("Resposta")
+    nova_e = st.text_input("Email (opcional)")
+    nova_m = st.text_area("Modelo de email sugerido (opcional)")
+    pw = st.text_input("Password de administrador", type="password")
+    if st.button("💾 Guardar nova pergunta"):
+        if pw != PASSWORD_ADMIN:
             st.error("🔒 Password incorreta.")
-        elif not nova_pergunta or not nova_resposta:
-            st.warning("⚠️ Pergunta e resposta são obrigatórias.")
+        elif not nova_p or not nova_r:
+            st.warning("❗ Preencha a pergunta e a resposta.")
         else:
-            todas = {p["pergunta"]: p for p in base}
-            todas[nova_pergunta] = {
-                "pergunta": nova_pergunta,
-                "resposta": nova_resposta,
-                "email": novo_email,
-                "modelo_email": novo_modelo
-            }
-            guardar_base_conhecimento(list(todas.values()))
-            gerar_embeddings()
-            st.success("✅ Pergunta adicionada com sucesso.")
-            st.rerun()
+            inserir_pergunta(nova_p, nova_r, nova_e, nova_m)
+            st.success("✅ Pergunta adicionada.")
+            st.experimental_rerun()
 
-# Espaço visual
-st.markdown("<div class='espaco'></div>", unsafe_allow_html=True)
-
-# Editar pergunta existente
-with st.expander("✏️ Editar pergunta existente"):
-    pergunta_editar = st.selectbox("Escolha uma pergunta para editar", [""] + perguntas)
-
-    if pergunta_editar:
-        item = next((p for p in base if p["pergunta"] == pergunta_editar), {})
-        with st.form("form_edicao"):
-            nova_resposta = st.text_area("Resposta", value=item.get("resposta", ""))
-            novo_email = st.text_input("Email (opcional)", value=item.get("email", ""))
-            novo_modelo = st.text_area("Modelo de email (opcional)", value=item.get("modelo_email", ""))
+# Expander para editar ou apagar perguntas
+with st.expander("✏️ Editar ou apagar pergunta existente"):
+    editar = st.selectbox("Selecione uma pergunta para editar/apagar:", [""] + opcoes, key="editar")
+    if editar:
+        item = next((d for d in dados if d["pergunta"] == editar), None)
+        if item:
+            resp = st.text_area("Resposta", value=item["resposta"])
+            email = st.text_input("Email", value=item.get("email", ""))
+            modelo = st.text_area("Modelo de email sugerido", value=item.get("modelo", ""))
             apagar = st.checkbox("🗑️ Apagar esta pergunta")
-            password_edit = st.text_input("Password para editar/apagar", type="password")
-            submeter = st.form_submit_button("Guardar alterações")
-
-            if submeter:
-                if password_edit != "decivil2024":
+            pw2 = st.text_input("Password para confirmar", type="password")
+            if st.button("✅ Aplicar alterações"):
+                if pw2 != PASSWORD_ADMIN:
                     st.error("🔒 Password incorreta.")
                 else:
                     if apagar:
-                        base = [p for p in base if p["pergunta"] != pergunta_editar]
-                        st.success("❌ Pergunta removida.")
+                        apagar_pergunta(item["id"])
+                        st.success("❌ Pergunta apagada.")
                     else:
-                        for p in base:
-                            if p["pergunta"] == pergunta_editar:
-                                p["resposta"] = nova_resposta
-                                p["email"] = novo_email
-                                p["modelo_email"] = novo_modelo
-                        st.success("✅ Alterações guardadas.")
-                    guardar_base_conhecimento(base)
-                    gerar_embeddings()
-                    st.rerun()
+                        atualizar_pergunta(item["id"], resp, email, modelo)
+                        st.success("✅ Pergunta atualizada.")
+                    st.experimental_rerun()
 
-# Rodapé
-st.markdown("<hr style='margin-top: 50px;'>", unsafe_allow_html=True)
-st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
+st.markdown("---")
+st.caption("© 2025 AAC")
