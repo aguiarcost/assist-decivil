@@ -1,80 +1,78 @@
-import openai
+import streamlit as st
+from assistente import (
+    carregar_base_conhecimento,
+    guardar_base_conhecimento,
+    gerar_resposta,
+    gerar_embedding
+)
 import os
 import json
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 
-CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_KNOWLEDGE_VECTOR = "base_knowledge_vector.json"
+st.set_page_config(page_title="Assistente ACSUTA", layout="wide")
 
-# Carregar chave API
-openai.api_key = os.getenv("OPENAI_API_KEY")
+st.markdown("## 🤖 Felisberto, Assistente Administrativo ACSUTA")
+st.markdown("---")
 
-def carregar_base_conhecimento():
-    if os.path.exists(CAMINHO_CONHECIMENTO):
-        try:
-            with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return []
-    return []
+# Carrega base
+base = carregar_base_conhecimento()
 
-def guardar_base_conhecimento(base):
-    with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
-        json.dump(base, f, ensure_ascii=False, indent=2)
+# Frequência histórica para ordenação (opcional)
+frequencia = {}
+try:
+    with open("historico_perguntas.json", "r", encoding="utf-8") as f:
+        historico = json.load(f)
+        for item in historico:
+            p = item.get("pergunta")
+            if p:
+                frequencia[p] = frequencia.get(p, 0) + 1
+except:
+    pass
 
-def carregar_embeddings():
-    if os.path.exists(CAMINHO_KNOWLEDGE_VECTOR):
-        try:
-            with open(CAMINHO_KNOWLEDGE_VECTOR, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except:
-            data = []
-    else:
-        data = []
-    perguntas = [item["pergunta"] for item in data]
-    embeddings = np.array([item["embedding"] for item in data]) if data else np.array([])
-    return data, perguntas, embeddings
+perguntas_existentes = sorted(
+    set(p["pergunta"] for p in base),
+    key=lambda x: -frequencia.get(x, 0)
+)
 
-def gerar_embedding(texto):
-    try:
-        response = openai.embeddings.create(
-            model="text-embedding-3-small",
-            input=texto
-        )
-        return response.data[0].embedding
-    except Exception as e:
-        print(f"Erro a gerar embedding para: {texto}\n{e}")
-        return None
+# Dropdown de perguntas
+pergunta_dropdown = st.selectbox("Escolha uma pergunta existente:", [""] + perguntas_existentes)
 
-def gerar_resposta(pergunta_utilizador, threshold=0.8):
-    base = carregar_base_conhecimento()
-    data, perguntas, embeddings = carregar_embeddings()
+# Geração da resposta
+if pergunta_dropdown:
+    with st.spinner("A pensar..."):
+        resposta = gerar_resposta(pergunta_dropdown)
+        if resposta:
+            st.markdown("### 💬 Resposta")
+            st.markdown(resposta, unsafe_allow_html=True)
+        else:
+            st.warning("Não foi possível gerar uma resposta.")
 
-    # Correspondência exata
-    for item in base:
-        if item["pergunta"].strip().lower() == pergunta_utilizador.strip().lower():
-            resposta = item["resposta"]
-            if item.get("email"):
-                resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-            if item.get("modelo_email"):
-                resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
-            return resposta
+st.markdown("---")
+st.markdown("### ➕ Inserir nova pergunta")
+com_nova = st.checkbox("Quero adicionar uma nova pergunta")
 
-    # Similaridade
-    emb = gerar_embedding(pergunta_utilizador)
-    if emb is None or len(embeddings) == 0:
-        return "❓ Não foi possível gerar uma resposta adequada."
+if com_nova:
+    with st.form("formulario_novo"):
+        nova_pergunta = st.text_input("Pergunta")
+        nova_resposta = st.text_area("Resposta")
+        email = st.text_input("Email (opcional)")
+        modelo_email = st.text_area("Modelo de email sugerido (opcional)")
+        password = st.text_input("Password de autorização", type="password")
+        submeter = st.form_submit_button("Guardar pergunta")
 
-    sims = cosine_similarity([emb], embeddings)[0]
-    idx = int(np.argmax(sims))
-    if sims[idx] >= threshold:
-        item = data[idx]
-        resposta = item["resposta"]
-        if item.get("email"):
-            resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-        if item.get("modelo_email"):
-            resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
-        return resposta
-
-    return "❓ Não foi possível encontrar uma resposta relevante na base de conhecimento."
+        if submeter:
+            if password != "decivil2024":
+                st.error("🔒 Password incorreta.")
+            elif not nova_pergunta or not nova_resposta:
+                st.warning("⚠️ A pergunta e resposta são obrigatórias.")
+            else:
+                base = carregar_base_conhecimento()
+                base = [p for p in base if p["pergunta"].strip().lower() != nova_pergunta.strip().lower()]
+                base.append({
+                    "pergunta": nova_pergunta.strip(),
+                    "resposta": nova_resposta.strip(),
+                    "email": email.strip(),
+                    "modelo_email": modelo_email.strip()
+                })
+                guardar_base_conhecimento(base)
+                st.success("✅ Pergunta adicionada com sucesso. A app será recarregada.")
+                st.rerun()
