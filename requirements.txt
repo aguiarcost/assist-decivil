@@ -4,3 +4,8 @@ python-dotenv
 supabase
 scikit-learn
 numpy
+pymupdf  # Para PDF
+python-docx  # Para DOCX
+requests  # Para URLs
+beautifulsoup4  # Para scraping
+hashlib  # Para hash de password (built-in, mas listado para clareza)
