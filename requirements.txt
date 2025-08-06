@@ -1,11 +1,11 @@
-streamlit
-openai
-python-dotenv
-supabase
-scikit-learn
-numpy
-pymupdf
-python-docx
-requests
-beautifulsoup4
-hashlib
+pip==25.2
+streamlit==1.47.1  # Latest as of July 2025
+openai==2.5.0     # Check latest compatible version on PyPI
+python-dotenv==1.0.1
+supabase==2.8.0   # Check latest
+scikit-learn==1.5.2
+numpy==2.1.1
+pymupdf==1.24.10  # Check for pre-built wheels
+python-docx==1.1.2
+requests==2.32.3
+beautifulsoup4==4.12.3
