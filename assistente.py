@@ -25,9 +25,11 @@ openai.api_key = OPENAI_API_KEY
 def carregar_base_conhecimento():
     try:
         response = supabase_client.table("base_conhecimento").select("*").execute()
-        return response.data
+        data = response.data if hasattr(response, "data") else []
+        perguntas_validas = [p for p in data if "pergunta" in p and "resposta" in p]
+        return perguntas_validas
     except Exception as e:
-        print("Erro ao carregar base de conhecimento:", e)
+        print(f"Erro ao carregar perguntas da base de conhecimento: {e}")
         return []
 
 def gerar_resposta(pergunta):
