@@ -1,11 +1,11 @@
 pip==25.2
-streamlit==1.47.1  # Latest as of July 2025
-openai==2.5.0     # Check latest compatible version on PyPI
+streamlit==1.47.1
+openai==1.99.1  # Use latest 1.x or check for 2.x release
 python-dotenv==1.0.1
-supabase==2.8.0   # Check latest
+supabase==2.8.0
 scikit-learn==1.5.2
 numpy==2.1.1
-pymupdf==1.24.10  # Check for pre-built wheels
+pymupdf==1.24.10
 python-docx==1.1.2
 requests==2.32.3
 beautifulsoup4==4.12.3
