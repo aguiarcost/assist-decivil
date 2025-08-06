@@ -1,6 +1,7 @@
 import os
 import hashlib
 import numpy as np
+import json  # Added for saving to JSON
 from openai import OpenAI
 from supabase import create_client, Client
 from sklearn.metrics.pairwise import cosine_similarity
@@ -32,6 +33,17 @@ def carregar_base_conhecimento():
         return response.data
     except Exception as e:
         raise RuntimeError(f"Erro ao carregar base de conhecimento: {e}")
+
+def guardar_base_conhecimento(filename: str = "base_conhecimento_backup.json"):
+    """Salva a base de conhecimento localmente como JSON (para backup ou export)."""
+    try:
+        data = carregar_base_conhecimento()
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        return True
+    except Exception as e:
+        print(f"Erro ao salvar base de conhecimento: {e}")
+        return False
 
 def gerar_resposta(pergunta: str) -> str:
     """Gera resposta: exata ou semântica via embeddings."""
