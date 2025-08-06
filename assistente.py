@@ -22,14 +22,34 @@ openai.api_key = OPENAI_API_KEY
 # Funções principais
 # ------------------------
 
+import json  # importar o módulo JSON no topo do arquivo
+
 def carregar_base_conhecimento():
-    """Carrega todas as perguntas da tabela 'base_conhecimento' do Supabase."""
     try:
+        # Tenta obter todas as perguntas do Supabase
         response = supabase_client.table("base_conhecimento").select("*").execute()
-        return response.data  # retorna uma lista de registros (dicionários)
+        data = response.data
     except Exception as e:
-        print("Erro ao carregar base de conhecimento:", e)
-        return []
+        print("Erro ao carregar base de conhecimento do Supabase:", e)
+        data = []  # Em caso de exceção, considera como nenhuma pergunta carregada
+    # Se não obteve dados (lista vazia), carrega do ficheiro local
+    if not data:
+        try:
+            with open("base_conhecimento.json", "r", encoding="utf-8") as file:
+                data = json.load(file)
+            print("Base de conhecimento carregada do arquivo local.")
+        except Exception as e:
+            print("Erro ao carregar base_conhecimento.json local:", e)
+            return []  # Retorna lista vazia se não conseguir ler o ficheiro local
+        # Insere os dados iniciais no Supabase para persistência (caso permitido)
+        try:
+            supabase_client.table("base_conhecimento").insert(data).execute()
+            print("Dados iniciais inseridos na tabela Supabase.")
+        except Exception as e:
+            print("Erro ao inserir dados iniciais no Supabase:", e)
+        return data
+    # Se já havia dados no Supabase, retorna-os diretamente
+    return data
 
 def gerar_resposta(pergunta):
     """
