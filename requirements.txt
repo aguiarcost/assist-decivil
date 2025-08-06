@@ -1,10 +1,6 @@
-streamlit==1.47.1  # Latest as of July 2025
-openai==1.99.1     # Correct latest version
-python-dotenv==1.0.1
-supabase==2.8.0    # Latest
-scikit-learn==1.5.2
-numpy==2.1.1
-pymupdf==1.24.10   # For PDF processing; uses pre-built wheels to avoid build issues
-python-docx==1.1.2 # For DOCX
-requests==2.32.3
-beautifulsoup4==4.12.3
+streamlit
+openai
+python-dotenv
+supabase
+scikit-learn
+numpy
