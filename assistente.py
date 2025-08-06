@@ -1,116 +1,98 @@
 import os
-import hashlib
+import openai
 import numpy as np
-from openai import OpenAI
 from supabase import create_client, Client
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Carregar variáveis de ambiente
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-ADMIN_PASSWORD_HASH = hashlib.sha256(os.environ.get("ADMIN_PASSWORD", "").encode()).hexdigest()  # Hash para segurança
+# Ambiente
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not (SUPABASE_URL and SUPABASE_KEY and OPENAI_API_KEY):
-    raise EnvironmentError("⚠️ É necessário definir SUPABASE_URL, SUPABASE_KEY e OPENAI_API_KEY.")
-
-# Inicializar clientes
+openai.api_key = OPENAI_API_KEY
 supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-def gerar_embedding(texto: str) -> np.ndarray:
-    """Gera embedding com OpenAI."""
+# Gerar embedding
+def get_embedding(texto):
     try:
-        response = openai_client.embeddings.create(model="text-embedding-3-small", input=texto)
-        return np.array(response.data[0].embedding)
+        resposta = openai.embeddings.create(
+            model="text-embedding-3-small",
+            input=texto
+        )
+        return resposta.data[0].embedding
     except Exception as e:
-        raise RuntimeError(f"Erro ao gerar embedding: {e}")
+        print(f"Erro ao gerar embedding: {e}")
+        return None
 
+# Carregar todas as perguntas da base
 def carregar_base_conhecimento():
-    """Carrega base de conhecimento do Supabase."""
     try:
-        response = supabase_client.table("base_conhecimento").select("*").execute()
-        return response.data
+        resposta = supabase_client.table("base_conhecimento").select("*").execute()
+        dados = resposta.data
+        return dados if dados else []
     except Exception as e:
-        raise RuntimeError(f"Erro ao carregar base de conhecimento: {e}")
+        print(f"Erro ao carregar base: {e}")
+        return []
 
-def gerar_resposta(pergunta: str) -> str:
-    """Gera resposta: exata ou semântica via embeddings."""
-    perguntas = carregar_base_conhecimento()
-    pergunta_input = pergunta.strip().lower()
-    embedding_input = gerar_embedding(pergunta_input)
-    
-    # Busca exata primeiro
-    for item in perguntas:
-        if item["pergunta"].strip().lower() == pergunta_input:
-            return formatar_resposta(item)
-    
-    # Busca semântica se não exata
-    max_sim = 0
-    best_item = None
-    for item in perguntas:
-        emb_db = np.array(item.get("embedding"))
-        if emb_db.size > 0:
-            sim = cosine_similarity([embedding_input], [emb_db])[0][0]
-            if sim > max_sim:
-                max_sim = sim
-                best_item = item
-    
-    if max_sim > 0.8:  # Threshold para match aproximado
-        return formatar_resposta(best_item) + f"\n\n(Resposta baseada em similaridade: {max_sim:.2f})"
-    
-    return "❓ Não foi possível encontrar uma resposta para essa pergunta."
-
-def formatar_resposta(item: dict) -> str:
-    """Formata resposta com email e modelo."""
-    resposta = item.get("resposta", "").strip()
-    email = item.get("email", "").strip()
-    modelo = item.get("modelo_email", "").strip()
-    if email:
-        resposta += f"\n\n📫 **Email de contacto:** {email}"
-    if modelo:
-        resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
-    return resposta
-
-def adicionar_pergunta_supabase(pergunta: str, resposta: str, email: str = "", modelo_email: str = "", password: str = "") -> bool:
-    """Adiciona pergunta ao Supabase se password ok."""
-    if hashlib.sha256(password.encode()).hexdigest() != ADMIN_PASSWORD_HASH:
-        return False
+# Guardar (ou atualizar) pergunta
+def guardar_base_conhecimento(nova):
     try:
-        embedding = gerar_embedding(pergunta)
-        data = {
-            "pergunta": pergunta.strip(),
-            "resposta": resposta.strip(),
-            "email": email.strip(),
-            "modelo_email": modelo_email.strip(),
-            "embedding": embedding.tolist()
+        perguntas_existentes = carregar_base_conhecimento()
+        existente = next((p for p in perguntas_existentes if p["pergunta"].strip().lower() == nova["pergunta"].strip().lower()), None)
+        novo_embedding = get_embedding(nova["pergunta"])
+        if novo_embedding is None:
+            print("❌ Falha ao gerar embedding.")
+            return
+
+        dados = {
+            "pergunta": nova["pergunta"].strip(),
+            "resposta": nova["resposta"].strip(),
+            "email": nova.get("email", "").strip(),
+            "modelo_email": nova.get("modelo_email", "").strip(),
+            "embedding": novo_embedding
         }
-        supabase_client.table("base_conhecimento").insert(data).execute()
-        return True
-    except Exception as e:
-        print(f"Erro ao adicionar pergunta: {e}")
-        return False
 
-def atualizar_pergunta_supabase(pergunta: str, nova_resposta: str, novo_email: str = "", novo_modelo: str = "", password: str = "") -> bool:
-    """Atualiza pergunta no Supabase se password ok."""
-    if hashlib.sha256(password.encode()).hexdigest() != ADMIN_PASSWORD_HASH:
-        return False
+        if existente:
+            supabase_client.table("base_conhecimento").update(dados).eq("pergunta", existente["pergunta"]).execute()
+        else:
+            supabase_client.table("base_conhecimento").insert(dados).execute()
+
+    except Exception as e:
+        print(f"Erro ao guardar: {e}")
+
+# Gerar resposta a partir do texto
+def gerar_resposta(pergunta_utilizador, threshold=0.8):
     try:
-        embedding = gerar_embedding(pergunta)
-        supabase_client.table("base_conhecimento").update({
-            "resposta": nova_resposta.strip(),
-            "email": novo_email.strip(),
-            "modelo_email": novo_modelo.strip(),
-            "embedding": embedding.tolist()
-        }).eq("pergunta", pergunta).execute()
-        return True
-    except Exception as e:
-        print(f"Erro ao atualizar pergunta: {e}")
-        return False
+        base = carregar_base_conhecimento()
+        if not base:
+            return "❌ Base de conhecimento vazia."
 
-# Função para processar documentos (movida de preparar_documentos_streamlit.py)
-def processar_documento(file_or_url, max_block_size=1000):
-    # [Código otimizado similar ao original, mas com batching para embeddings se múltiplos blocos]
-    # Exemplo: Extrair texto, dividir em blocos, gerar embeddings em batch via OpenAI se possível.
-    # Para brevidade, omitido; implementar batch com openai_client.embeddings.create(input=blocos_list).
-    pass  # Implementar conforme necessário para RAG.
+        embeddings = np.array([d["embedding"] for d in base if d.get("embedding")])
+        perguntas = [d["pergunta"] for d in base]
+
+        embedding_utilizador = get_embedding(pergunta_utilizador)
+        if embedding_utilizador is None:
+            return "❌ Erro ao gerar embedding para a pergunta."
+
+        if len(embeddings) == 0:
+            return "❌ Sem embeddings disponíveis."
+
+        sims = cosine_similarity([embedding_utilizador], embeddings)[0]
+        idx_mais_proximo = int(np.argmax(sims))
+        sim = sims[idx_mais_proximo]
+
+        if sim < threshold:
+            return "❓ Não foi encontrada uma resposta suficientemente próxima."
+
+        entrada = base[idx_mais_proximo]
+        resposta = entrada["resposta"]
+
+        if entrada.get("email"):
+            resposta += f"\n\n📫 **Email de contacto:** {entrada['email']}"
+        if entrada.get("modelo_email"):
+            resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{entrada['modelo_email']}\n```"
+
+        return resposta
+
+    except Exception as e:
+        return f"❌ Erro a gerar resposta: {e}"
