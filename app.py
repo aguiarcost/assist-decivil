@@ -1,5 +1,3 @@
-# app.py - Código Principal da Aplicação Streamlit
-
 import streamlit as st
 from assistente import (
     carregar_base_conhecimento,
@@ -8,7 +6,6 @@ from assistente import (
     atualizar_pergunta_supabase,
 )
 import os
-import hashlib  # Para hashing de password
 
 st.set_page_config(page_title="Felisberto, Assistente ACSUTA", layout="wide")
 
@@ -49,16 +46,10 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Hash da password admin para segurança
-ADMIN_PASSWORD_HASH = hashlib.sha256(os.environ.get("ADMIN_PASSWORD", "").encode()).hexdigest()
-
-# Carregar perguntas com cache
-@st.cache_data(ttl=300)  # Cache por 5 minutos
-def get_perguntas_ordenadas():
-    perguntas = carregar_base_conhecimento()
-    return sorted([p["pergunta"] for p in perguntas])
-
-perguntas_ordenadas = get_perguntas_ordenadas()
+# Carregar perguntas
+perguntas = carregar_base_conhecimento()
+perguntas_dict = {p["pergunta"]: p for p in perguntas}
+perguntas_ordenadas = sorted(perguntas_dict.keys())
 
 st.markdown("## ❓ Perguntas Frequentes")
 
@@ -81,13 +72,13 @@ with st.expander("Adicionar nova pergunta"):
     if st.button("Guardar nova pergunta"):
         if not nova_pergunta or not nova_resposta:
             st.warning("⚠️ Pergunta e resposta são obrigatórias.")
-        elif hashlib.sha256(password.encode()).hexdigest() != ADMIN_PASSWORD_HASH:
+        elif password != os.environ.get("ADMIN_PASSWORD"):
             st.error("❌ Password incorreta.")
         else:
             sucesso = adicionar_pergunta_supabase(nova_pergunta, nova_resposta, novo_email, novo_modelo)
             if sucesso:
                 st.success("✅ Nova pergunta adicionada com sucesso.")
-                st.cache_data.clear()  # Limpa cache
+                st.experimental_rerun()
             else:
                 st.error("❌ Erro ao adicionar pergunta.")
 
@@ -97,19 +88,19 @@ st.markdown("## ✏️ Editar pergunta existente")
 with st.expander("Editar pergunta existente"):
     pergunta_a_editar = st.selectbox("Selecione a pergunta:", [""] + perguntas_ordenadas)
     if pergunta_a_editar:
-        dados = {p["pergunta"]: p for p in carregar_base_conhecimento()}[pergunta_a_editar]
+        dados = perguntas_dict[pergunta_a_editar]
         nova_resposta = st.text_area("Editar resposta", value=dados.get("resposta", ""))
         novo_email = st.text_input("Editar email (opcional)", value=dados.get("email", ""))
         novo_modelo = st.text_area("Editar modelo de email (opcional)", value=dados.get("modelo_email", ""))
         password_edit = st.text_input("Password de administrador", type="password", key="edit_pwd")
         if st.button("Guardar alterações"):
-            if hashlib.sha256(password_edit.encode()).hexdigest() != ADMIN_PASSWORD_HASH:
+            if password_edit != os.environ.get("ADMIN_PASSWORD"):
                 st.error("❌ Password incorreta.")
             else:
                 sucesso = atualizar_pergunta_supabase(pergunta_a_editar, nova_resposta, novo_email, novo_modelo)
                 if sucesso:
                     st.success("✅ Pergunta atualizada com sucesso.")
-                    st.cache_data.clear()  # Limpa cache
+                    st.experimental_rerun()
                 else:
                     st.error("❌ Erro ao atualizar pergunta.")
 
