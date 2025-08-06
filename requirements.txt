@@ -1,4 +1,6 @@
-streamlit>=1.33.0
-openai>=1.11.0
-python-dotenv>=1.0.0
-supabase>=2.0.0
+streamlit
+openai
+python-dotenv
+supabase
+scikit-learn
+numpy
