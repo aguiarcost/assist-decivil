@@ -1,62 +1,89 @@
 import os
 import openai
+import numpy as np
+from openai import OpenAIError
 from supabase import create_client, Client
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
 
-# API Keys via variáveis de ambiente
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Carregar variáveis de ambiente
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-# Validar credenciais
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("⚠️ SUPABASE_URL e SUPABASE_KEY não estão definidas.")
-if not OPENAI_API_KEY:
-    raise ValueError("⚠️ OPENAI_API_KEY não está definida.")
+if not (SUPABASE_URL and SUPABASE_KEY and OPENAI_API_KEY):
+    raise EnvironmentError("⚠️ É necessário definir SUPABASE_URL, SUPABASE_KEY e OPENAI_API_KEY.")
 
 # Inicializar clientes
 supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 openai.api_key = OPENAI_API_KEY
 
-# Carregar perguntas
+# ------------------------
+# Funções principais
+# ------------------------
+
 def carregar_base_conhecimento():
     try:
         response = supabase_client.table("base_conhecimento").select("*").execute()
-        data = response.data if hasattr(response, "data") else []
-        perguntas_validas = [p for p in data if "pergunta" in p and "resposta" in p]
-        return perguntas_validas
+        return response.data
     except Exception as e:
-        print(f"Erro ao carregar perguntas da base de conhecimento: {e}")
+        print("Erro ao carregar base de conhecimento:", e)
         return []
 
-# Guardar nova ou atualizar
-def guardar_base_conhecimento(pergunta_dict):
-    try:
-        pergunta = pergunta_dict["pergunta"]
-        existente = supabase_client.table("base_conhecimento").select("*").eq("pergunta", pergunta).execute()
-        if existente.data:
-            supabase_client.table("base_conhecimento").update(pergunta_dict).eq("pergunta", pergunta).execute()
-        else:
-            supabase_client.table("base_conhecimento").insert(pergunta_dict).execute()
-    except Exception as e:
-        print(f"Erro ao guardar pergunta: {e}")
+def gerar_resposta(pergunta):
+    perguntas = carregar_base_conhecimento()
+    pergunta_input = pergunta.strip().lower()
+    for item in perguntas:
+        if item["pergunta"].strip().lower() == pergunta_input:
+            resposta = item.get("resposta", "").strip()
+            email = item.get("email", "").strip()
+            modelo = item.get("modelo_email", "").strip()
 
-# Gerar resposta com email e modelo
-def gerar_resposta(pergunta_texto):
+            if email:
+                resposta += f"\n\n📫 **Email de contacto:** {email}"
+            if modelo:
+                resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{modelo}\n```"
+
+            return resposta
+
+    return "❓ Não foi possível encontrar uma resposta para essa pergunta."
+
+def adicionar_pergunta_supabase(pergunta, resposta, email="", modelo_email=""):
     try:
-        base = carregar_base_conhecimento()
-        for item in base:
-            if item["pergunta"].strip().lower() == pergunta_texto.strip().lower():
-                resposta = item["resposta"]
-                if item.get("email"):
-                    resposta += f"\n\n📫 **Email de contacto:** {item['email']}"
-                if item.get("modelo_email"):
-                    resposta += f"\n\n📧 **Modelo de email sugerido:**\n```\n{item['modelo_email']}\n```"
-                return resposta
-        return "❓ Não encontrei uma resposta para essa pergunta."
+        embedding = gerar_embedding(pergunta)
+        data = {
+            "pergunta": pergunta.strip(),
+            "resposta": resposta.strip(),
+            "email": email.strip(),
+            "modelo_email": modelo_email.strip(),
+            "embedding": embedding.tolist()
+        }
+        supabase_client.table("base_conhecimento").insert(data).execute()
+        return True
     except Exception as e:
-        return f"❌ Erro ao gerar resposta: {e}"
+        print("Erro ao adicionar pergunta:", e)
+        return False
+
+def atualizar_pergunta_supabase(pergunta, nova_resposta, novo_email="", novo_modelo=""):
+    try:
+        embedding = gerar_embedding(pergunta)
+        supabase_client.table("base_conhecimento").update({
+            "resposta": nova_resposta.strip(),
+            "email": novo_email.strip(),
+            "modelo_email": novo_modelo.strip(),
+            "embedding": embedding.tolist()
+        }).eq("pergunta", pergunta).execute()
+        return True
+    except Exception as e:
+        print("Erro ao atualizar pergunta:", e)
+        return False
+
+def gerar_embedding(texto):
+    try:
+        response = openai.embeddings.create(
+            model="text-embedding-3-small",
+            input=texto
+        )
         return np.array(response.data[0].embedding)
     except OpenAIError as e:
         print("Erro ao gerar embedding:", e)
