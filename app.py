@@ -1,17 +1,20 @@
 import streamlit as st
 from assistente import (
     carregar_base_conhecimento,
-    guardar_base_conhecimento,
-    gerar_resposta
+    gerar_resposta,
+    adicionar_pergunta_supabase,
+    atualizar_pergunta_supabase,
 )
+import os
 
-# Interface da página
 st.set_page_config(page_title="Felisberto, Assistente ACSUTA", layout="wide")
 
-# Estilo
+# Estilo personalizado com avatar e tons laranja
 st.markdown("""
     <style>
-    .stApp { background-color: #fff3e0; }
+    .stApp {
+        background-color: #fff3e0;
+    }
     .titulo-container {
         display: flex;
         align-items: center;
@@ -31,12 +34,11 @@ st.markdown("""
     .footer {
         text-align: center;
         color: gray;
-        margin-top: 80px;
+        margin-top: 50px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Cabeçalho
 st.markdown("""
     <div class="titulo-container">
         <img src="https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png" alt="Felisberto Avatar">
@@ -44,56 +46,63 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Estado de perguntas
-if "perguntas" not in st.session_state:
-    st.session_state.perguntas = carregar_base_conhecimento()
+# Carregar perguntas
+perguntas = carregar_base_conhecimento()
+perguntas_dict = {p["pergunta"]: p for p in perguntas}
+perguntas_ordenadas = sorted(perguntas_dict.keys())
 
-# Botão para atualizar lista manualmente
-if st.button("🔄 Atualizar lista de perguntas"):
-    st.session_state.perguntas = carregar_base_conhecimento()
-    st.success("Lista de perguntas atualizada com sucesso!")
+st.markdown("## ❓ Perguntas Frequentes")
 
-# Interface de pergunta
-perguntas_existentes = sorted([p["pergunta"] for p in st.session_state.perguntas])
-pergunta_selecionada = st.selectbox("Escolha uma pergunta existente:", [""] + perguntas_existentes)
+pergunta_selecionada = st.selectbox("Escolha uma pergunta:", [""] + perguntas_ordenadas)
 
-resposta = ""
 if pergunta_selecionada:
     resposta = gerar_resposta(pergunta_selecionada)
-
-# Mostrar resposta
-if resposta:
-    st.markdown("---")
-    st.subheader("💡 Resposta do assistente")
+    st.markdown("### 💬 Resposta")
     st.markdown(resposta, unsafe_allow_html=True)
 
-st.markdown("<br><br>", unsafe_allow_html=True)
+st.markdown("---")
+st.markdown("## ➕ Inserir nova pergunta")
 
-# Expander para inserir nova pergunta
-with st.expander("➕ Inserir nova pergunta"):
-    st.markdown("⚠️ Esta operação requer password de administrador.")
-    form_pergunta = st.text_input("Pergunta")
-    form_resposta = st.text_area("Resposta")
-    form_email = st.text_input("Email (opcional)")
-    form_modelo = st.text_area("Modelo de email sugerido (opcional)")
-    form_password = st.text_input("Password", type="password")
-    
+with st.expander("Adicionar nova pergunta"):
+    nova_pergunta = st.text_input("Pergunta")
+    nova_resposta = st.text_area("Resposta")
+    novo_email = st.text_input("Email de contacto (opcional)")
+    novo_modelo = st.text_area("Modelo de email sugerido (opcional)")
+    password = st.text_input("Password de administrador", type="password")
     if st.button("Guardar nova pergunta"):
-        if form_password != "decivil2024":
-            st.error("❌ Password inválida.")
-        elif not form_pergunta or not form_resposta:
-            st.warning("⚠️ Preencha pelo menos a pergunta e a resposta.")
+        if not nova_pergunta or not nova_resposta:
+            st.warning("⚠️ Pergunta e resposta são obrigatórias.")
+        elif password != os.environ.get("ADMIN_PASSWORD"):
+            st.error("❌ Password incorreta.")
         else:
-            nova = {
-                "pergunta": form_pergunta.strip(),
-                "resposta": form_resposta.strip(),
-                "email": form_email.strip(),
-                "modelo_email": form_modelo.strip()
-            }
-            guardar_base_conhecimento(nova)
-            st.success("✅ Pergunta adicionada com sucesso!")
-            st.session_state.perguntas = carregar_base_conhecimento()
+            sucesso = adicionar_pergunta_supabase(nova_pergunta, nova_resposta, novo_email, novo_modelo)
+            if sucesso:
+                st.success("✅ Nova pergunta adicionada com sucesso.")
+                st.experimental_rerun()
+            else:
+                st.error("❌ Erro ao adicionar pergunta.")
 
-# Rodapé
+st.markdown("---")
+st.markdown("## ✏️ Editar pergunta existente")
+
+with st.expander("Editar pergunta existente"):
+    pergunta_a_editar = st.selectbox("Selecione a pergunta:", [""] + perguntas_ordenadas)
+    if pergunta_a_editar:
+        dados = perguntas_dict[pergunta_a_editar]
+        nova_resposta = st.text_area("Editar resposta", value=dados.get("resposta", ""))
+        novo_email = st.text_input("Editar email (opcional)", value=dados.get("email", ""))
+        novo_modelo = st.text_area("Editar modelo de email (opcional)", value=dados.get("modelo_email", ""))
+        password_edit = st.text_input("Password de administrador", type="password", key="edit_pwd")
+        if st.button("Guardar alterações"):
+            if password_edit != os.environ.get("ADMIN_PASSWORD"):
+                st.error("❌ Password incorreta.")
+            else:
+                sucesso = atualizar_pergunta_supabase(pergunta_a_editar, nova_resposta, novo_email, novo_modelo)
+                if sucesso:
+                    st.success("✅ Pergunta atualizada com sucesso.")
+                    st.experimental_rerun()
+                else:
+                    st.error("❌ Erro ao atualizar pergunta.")
+
 st.markdown("<hr>", unsafe_allow_html=True)
 st.markdown("<div class='footer'>© 2025 AAC</div>", unsafe_allow_html=True)
