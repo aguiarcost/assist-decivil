@@ -1,3 +1,5 @@
+# app.py - Código Principal da Aplicação Streamlit
+
 import streamlit as st
 from assistente import (
     carregar_base_conhecimento,
