@@ -85,7 +85,7 @@ def editar_pergunta(pergunta_original, nova_pergunta, nova_resposta, novo_email=
     # evitar duplicado ao renomear
     if (nova_pergunta.strip().lower() != pergunta_original.strip().lower() and
         any(it["pergunta"].strip().lower() == nova_pergunta.strip().lower() for it in base)):
-        return False, "Já existe outra pergunta com esse texto."
+            return False, "Já existe outra pergunta com esse texto."
 
     alterada = False
     for it in base:
