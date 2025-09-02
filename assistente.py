@@ -39,7 +39,7 @@ def _deduplicar(lista):
         by_q[norm["pergunta"].lower()] = norm
     return list(by_q.values())
 
-# ---------- API pública ----------
+# ---------- API pública (usada pelo app.py) ----------
 def carregar_base():
     return _deduplicar(_ler_json(CAMINHO_CONHECIMENTO, []))
 
@@ -117,3 +117,4 @@ def importar_base_de_bytes(file_bytes):
         return True, "Base importada e guardada com sucesso."
     except Exception as e:
         return False, f"Erro a ler JSON: {e}"
+        
