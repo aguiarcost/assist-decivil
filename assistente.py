@@ -1,16 +1,12 @@
 import json
-import os
-import streamlit as st
 import numpy as np
 from datetime import datetime
-from supabase import create_client  # ✅ corrigido: não importar Client
+import streamlit as st
+from supabase import create_client
 
-# =========================
+# -----------------------------
 # Configuração Supabase
-# =========================
-TABLE_NAME = "base_conhecimento"
-ADMIN_PASSWORD = "decivil2024"
-
+# -----------------------------
 def _sb_client():
     url = st.secrets.get("SUPABASE_URL", "")
     key = st.secrets.get("SUPABASE_SERVICE_KEY", "")
@@ -19,53 +15,73 @@ def _sb_client():
         st.stop()
     return create_client(url, key)
 
-# =========================
-# Funções Base de Conhecimento
-# =========================
-def ler_base_conhecimento() -> list:
+TABLE_NAME = "base_conhecimento"
+
+# -----------------------------
+# Funções de acesso à base
+# -----------------------------
+def carregar_perguntas_frequentes() -> list[str]:
+    sb = _sb_client()
+    res = sb.table(TABLE_NAME).select("pergunta").order("pergunta").execute()
+    return [r["pergunta"] for r in (res.data or []) if r.get("pergunta")]
+
+def obter_resposta(pergunta: str) -> tuple[str, str]:
+    """Devolve (resposta, modelo_email) para a pergunta, ou (None,None)."""
+    sb = _sb_client()
+    res = sb.table(TABLE_NAME).select("*").eq("pergunta", pergunta).execute()
+    if res.data:
+        item = res.data[0]
+        resposta = item.get("resposta", "")
+        modelo = item.get("modelo_email", "")
+        email = item.get("email", "")
+        texto = resposta
+        if email:
+            texto += f"\n\n**📧 Contacto:** [{email}](mailto:{email})"
+        return texto, modelo
+    return None, None
+
+def upsert_pergunta(pergunta: str, resposta: str, email: str, modelo_email: str):
+    sb = _sb_client()
+    payload = {
+        "pergunta": (pergunta or "").strip(),
+        "resposta": (resposta or "").strip(),
+        "email": (email or "").strip(),
+        "modelo_email": (modelo_email or "").strip(),
+        "created_at": datetime.utcnow().isoformat()
+    }
+    sb.table(TABLE_NAME).upsert(payload, on_conflict="pergunta").execute()
+
+def apagar_pergunta(pergunta: str):
+    sb = _sb_client()
+    sb.table(TABLE_NAME).delete().eq("pergunta", pergunta.strip()).execute()
+
+def importar_perguntas(novas: list[dict]):
+    sb = _sb_client()
+    rows = []
+    for it in novas:
+        if not isinstance(it, dict):
+            continue
+        if "pergunta" in it and "resposta" in it:
+            rows.append({
+                "pergunta": (it.get("pergunta") or "").strip(),
+                "resposta": (it.get("resposta") or "").strip(),
+                "email": (it.get("email") or "").strip(),
+                "modelo_email": (it.get("modelo_email") or it.get("modelo") or "").strip(),
+                "created_at": datetime.utcnow().isoformat()
+            })
+    if rows:
+        sb.table(TABLE_NAME).upsert(rows, on_conflict="pergunta").execute()
+
+def exportar_perguntas() -> str:
     sb = _sb_client()
     res = sb.table(TABLE_NAME).select("*").order("pergunta").execute()
     dados = res.data or []
-    out = []
-    for r in dados:
-        out.append({
-            "id": r.get("id"),
-            "pergunta": (r.get("pergunta") or "").strip(),
-            "resposta": (r.get("resposta") or "").strip(),
-            "email": (r.get("email") or "").strip(),
-            "modelo_email": (r.get("modelo_email") or r.get("modelo") or "").strip(),
-            "created_at": r.get("created_at"),
+    export = []
+    for d in dados:
+        export.append({
+            "pergunta": d.get("pergunta", ""),
+            "resposta": d.get("resposta", ""),
+            "email": d.get("email", ""),
+            "modelo_email": d.get("modelo_email", ""),
         })
-    return out
-
-def upsert_pergunta(_, nova: dict) -> list:
-    sb = _sb_client()
-    payload = {
-        "pergunta": (nova.get("pergunta") or "").strip(),
-        "resposta": (nova.get("resposta") or "").strip(),
-        "email": (nova.get("email") or "").strip(),
-        "modelo_email": (nova.get("modelo_email") or "").strip(),
-        "updated_at": datetime.utcnow().isoformat()
-    }
-    sb.table(TABLE_NAME).upsert(payload, on_conflict="pergunta").execute()
-    return ler_base_conhecimento()
-
-def apagar_pergunta(_, pergunta: str) -> list:
-    sb = _sb_client()
-    sb.table(TABLE_NAME).delete().eq("pergunta", pergunta.strip()).execute()
-    return ler_base_conhecimento()
-
-def exportar_toda_base_json() -> str:
-    dados = ler_base_conhecimento()
-    return json.dumps(
-        [
-            {
-                "pergunta": d["pergunta"],
-                "resposta": d["resposta"],
-                "email": d.get("email", ""),
-                "modelo_email": d.get("modelo_email", "")
-            }
-            for d in dados
-        ],
-        ensure_ascii=False, indent=2
-    )
+    return json.dumps(export, ensure_ascii=False, indent=2)
