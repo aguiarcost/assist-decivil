@@ -1,15 +1,17 @@
-import json
 import os
+import json
 import requests
 from io import BytesIO
+import streamlit as st
 from datetime import datetime
 
-import streamlit as st
 from assistente import (
-    ler_base_conhecimento,
+    carregar_perguntas_frequentes,
+    obter_resposta,
     upsert_pergunta,
     apagar_pergunta,
-    exportar_toda_base_json,
+    importar_perguntas,
+    exportar_perguntas,
 )
 
 # =========================
