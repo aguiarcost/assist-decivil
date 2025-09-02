@@ -1,162 +1,205 @@
-# -*- coding: utf-8 -*-
-import io
-import json
-from typing import List, Dict, Any
-import streamlit as st
 import os
-import difflib
+import json
+import streamlit as st
+from datetime import datetime
+from assistente import (
+    ler_base_conhecimento,
+    sb_upsert,
+    sb_delete_by_pergunta,
+    exportar_toda_base_json,
+    sb_bulk_import,
+    PASSWORD,
+)
 
-import assistente as backend
+# =========================
+# Configuração & Estilos
+# =========================
+st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
-st.set_page_config(page_title="Assist-Decivil", page_icon="🧑‍💼", layout="wide")
+APP_TITLE = "Felisberto, Assistente Administrativo ACSUTA"
 
-# Cabeçalho com avatar (se existir)
-avatar_path = os.path.join(os.path.dirname(__file__), "assets", "felisberto_avatar.png")
-col_logo, col_title = st.columns([1, 6])
-with col_logo:
-    if os.path.exists(avatar_path):
-        st.image(avatar_path, width=96)
-with col_title:
-    st.title("Assist-Decivil")
-    st.caption("Gestão de base de conhecimento + geração de e-mails — v2")
+st.markdown(
+    """
+    <style>
+    .stApp { background: #fff7ef; }
+    .felis-title { color:#ef6c00; font-weight:800; font-size: 32px; margin:0; line-height:1.1; }
+    .felis-header { display:flex; align-items:center; gap:12px; margin-top:-4px; margin-bottom:10px; }
+    .felis-avatar { width:84px; height:auto; border-radius:10px; }
+    hr { border:0; border-top:1px solid #ffd3ad; margin:16px 0; }
+    .resp-box { background:#fff; border:1px solid #f0e0d0; border-radius:10px; padding:14px 16px; }
+    .section-title {
+      margin: 28px 0 8px 0; padding: 10px 12px; background:#fff1e3;
+      border:1px solid #ffd3ad; border-radius:10px; color:#a65300; font-weight:800;
+    }
+    .spacer { height: 8px; }
+    [data-testid="stExpander"] {
+      margin-top: 10px; border: 1px solid #ffd3ad; border-radius: 10px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.05);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-# Estado de sessão (admin)
-if "admin_ok" not in st.session_state:
-    st.session_state.admin_ok = False
+# =========================
+# Header com avatar
+# =========================
+st.markdown("<div class='felis-header'>", unsafe_allow_html=True)
+avatar_path = "felisberto_avatar.png"
+if os.path.exists(avatar_path):
+    st.image(avatar_path, width=84)
+else:
+    st.markdown("🧑‍💼")  # fallback
 
-def _is_admin() -> bool:
-    return bool(st.session_state.admin_ok)
+st.markdown(f"<h1 class='felis-title'>{APP_TITLE}</h1></div>", unsafe_allow_html=True)
 
-def _check_admin(pwd: str) -> bool:
-    ok = (pwd or "") == (backend.PASSWORD or "")
-    st.session_state.admin_ok = ok
-    return ok
+# =========================
+# Perguntas & Respostas
+# =========================
+st.markdown("<div class='section-title'>📋 Perguntas frequentes</div>", unsafe_allow_html=True)
 
-# Funções utilitárias
-@st.cache_data(show_spinner=False)
-def _load_base() -> List[Dict[str, Any]]:
-    return backend.ler_base_conhecimento()
+# lê dados (com cache interna do módulo)
+base = ler_base_conhecimento()
+perguntas = [p["pergunta"] for p in base]
 
-def _reload():
-    _load_base.clear()  # type: ignore
-    _load_base()
+col_q, = st.columns(1)
+with col_q:
+    pergunta_sel = st.selectbox("Escolha uma pergunta:", [""] + perguntas, index=0)
 
-def _filtrar(busca: str, dados: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    b = (busca or "").strip().lower()
-    if not b:
-        return dados
-    # procura direta em pergunta/resposta
-    res = [d for d in dados if b in (d.get("pergunta","").lower()) or b in (d.get("resposta","").lower())]
-    # se muito curto, devolve já
-    if len(res) >= 1 or len(b) < 3:
-        return res
-    # fuzzy match por pergunta
-    perguntas = [d.get("pergunta","") for d in dados]
-    candidatos = difflib.get_close_matches(b, [p.lower() for p in perguntas], n=10, cutoff=0.6)
-    final = []
-    for d in dados:
-        if d.get("pergunta","").lower() in candidatos:
-            final.append(d)
-    return final or res
+# resposta dinâmica
+if pergunta_sel:
+    entrada = next((x for x in base if x["pergunta"] == pergunta_sel), None)
+    if entrada:
+        st.markdown("### 💡 Resposta do assistente")
+        st.markdown(f"<div class='resp-box'>{entrada['resposta']}</div>", unsafe_allow_html=True)
 
-abas = st.tabs(["🔎 Consultar", "🗂️ Gerir Base", "⬆️ Importar / ⬇️ Exportar", "🧠 Embeddings"])
+        if (entrada.get("email") or "").strip():
+            st.markdown("**📧 Contacto:** " + f"[{entrada['email']}](mailto:{entrada['email']})")
 
-# --- Consultar ---
-with abas[0]:
-    st.subheader("Pesquisar")
-    q = st.text_input("O que procura?", placeholder="ex.: Como posso reservar uma sala?")
-    dados = _load_base()
-    filtrados = _filtrar(q, dados) if q else dados
+        if (entrada.get("modelo_email") or "").strip():
+            st.markdown("**✉️ Modelo de email sugerido:**")
+            st.code(entrada["modelo_email"], language="text")
 
-    st.write(f"Encontrados: **{len(filtrados)}** registos")
-    for item in filtrados:
-        with st.expander(item.get("pergunta","(sem título)")):
-            st.markdown(item.get("resposta","").strip() or "_Sem resposta._")
-            if item.get("email"):
-                st.write("**Email:** ", item.get("email"))
-            if item.get("modelo_email"):
-                st.text_area("Modelo de email", value=item.get("modelo_email","").strip(), height=140)
+# dar mais “respiro” antes da área admin
+st.markdown("<div class='spacer'></div><div class='spacer'></div>", unsafe_allow_html=True)
 
-# --- Gerir Base ---
-with abas[1]:
-    st.subheader("Administração")
-    if not _is_admin():
-        pwd = st.text_input("Password de administração", type="password")
-        if st.button("Entrar", type="primary"):
-            if _check_admin(pwd):
-                st.success("Sessão iniciada.")
-            else:
-                st.error("Password incorreta.")
-        st.stop()
+# =========================
+# Criar nova pergunta (expander)
+# =========================
+with st.expander("➕ Criar nova pergunta"):
+    with st.form("form_criar", clear_on_submit=False):
+        pwd_new = st.text_input("Password", type="password")
+        nova_pergunta = st.text_input("Pergunta")
+        nova_resposta = st.text_area("Resposta", height=140)
+        novo_email = st.text_input("Email (opcional)")
+        novo_modelo = st.text_area("Modelo de email (opcional)", height=140)
+        salvar = st.form_submit_button("💾 Guardar")
 
-    dados = _load_base()
-    ids = [d.get("id") for d in dados]
-    labels = [f'{d.get("pergunta","(sem título)")[:70]}… [{d.get("id","")[:8]}]' for d in dados]
-    idx = st.selectbox("Selecionar registo para editar (opcional)", options=list(range(len(dados))), format_func=lambda i: labels[i] if labels else "", index=None, placeholder="— novo registo —")
-
-    if idx is None:
-        item = {"pergunta":"", "resposta":"", "email":"", "modelo_email":""}
-    else:
-        item = dict(dados[idx])
-
-    with st.form("form_registo", clear_on_submit=False):
-        pergunta = st.text_input("Pergunta", value=item.get("pergunta",""))
-        resposta = st.text_area("Resposta", value=item.get("resposta",""), height=200)
-        email = st.text_input("Email (contacto)", value=item.get("email",""))
-        modelo_email = st.text_area("Modelo de email (opcional)", value=item.get("modelo_email",""), height=160)
-        c1, c2, c3 = st.columns(3)
-        submitted = c1.form_submit_button("Guardar", type="primary")
-        if idx is not None:
-            apagar = c2.form_submit_button("Apagar", type="secondary")
+    if salvar:
+        if pwd_new != PASSWORD:
+            st.error("🔒 Password incorreta.")
+        elif not nova_pergunta or not nova_resposta:
+            st.warning("⚠️ Preenche pelo menos Pergunta e Resposta.")
         else:
-            apagar = False
+            try:
+                sb_upsert(nova_pergunta, nova_resposta, novo_email, novo_modelo)
+                st.success("✅ Pergunta criada/atualizada com sucesso.")
+                st.rerun()  # atualiza dropdown imediatamente
+            except Exception as e:
+                st.error(f"Erro: {e}")
 
-    if submitted:
-        backend.sb_upsert(pergunta, resposta, email, modelo_email)
-        st.success("Registo guardado.")
-        _reload()
+# =========================
+# Editar / Apagar pergunta (expander)
+# =========================
+with st.expander("✏️ Editar ou apagar pergunta existente"):
+    base2 = ler_base_conhecimento()
+    perguntas2 = [p["pergunta"] for p in base2]
 
-    if apagar and idx is not None:
-        try:
-            backend.sb_delete_by_pergunta(item.get("pergunta",""))
-            st.success("Registo apagado.")
-            _reload()
-        except Exception as e:
-            st.error(f"Erro ao apagar: {e}")
-
-# --- Importar/Exportar ---
-with abas[2]:
-    st.subheader("Exportar")
-    b = backend.exportar_toda_base_json()
-    st.download_button("Descarregar base em JSON", b, file_name="base_conhecimento.export.json", mime="application/json")
-
-    st.subheader("Importar")
-    st.caption("Importe uma lista de objetos com os campos: pergunta, resposta, email, modelo_email. (Opcionalmente com 'id').")
-    up = st.file_uploader("Escolha um ficheiro JSON", type=["json"])
-    if up is not None:
-        try:
-            raw = up.read()
-            n = backend.sb_bulk_import(raw)
-            st.success(f"Importados {n} registos.")
-            _reload()
-        except Exception as e:
-            st.error(f"Falhou importação: {e}")
-
-# --- Embeddings ---
-with abas[3]:
-    st.subheader("Geração de embeddings")
-    st.write("""
-Para gerar o ficheiro **base_knowledge_vector.json** com embeddings, execute no terminal:
-```bash
-export OPENAI_API_KEY="...a_tua_chave..."
-python gerar_embeddings.py --modelo text-embedding-3-small --saida base_knowledge_vector.json
-```
-O script usa Supabase se estiver configurado; caso contrário, usa o ficheiro `base_conhecimento.json`.
-""")
-    # Mostra estado do ficheiro local (se existir)
-    from pathlib import Path
-    vec_path = Path(backend.VECTOR_JSON_PATH)
-    if vec_path.exists():
-        st.info(f"Ficheiro de embeddings encontrado: {vec_path} ({vec_path.stat().st_size} bytes)")
+    if not perguntas2:
+        st.info("Base de conhecimento vazia.")
     else:
-        st.warning("Ainda não existe ficheiro de embeddings. Use o comando acima para o gerar.")
+        alvo = st.selectbox("Pergunta a editar:", [""] + perguntas2, key="sel_edit")
+        atual = next((x for x in base2 if x["pergunta"] == alvo), None) or {}
+
+        with st.form("form_editar", clear_on_submit=False):
+            pwd_edit = st.text_input("Password", type="password", key="pwd_edit")
+            e_resposta = st.text_area("Resposta", value=atual.get("resposta", ""), height=140)
+            e_email = st.text_input("Email (opcional)", value=atual.get("email", ""), key="e_email")
+            e_modelo = st.text_area("Modelo de email (opcional)", value=atual.get("modelo_email", ""), height=140, key="e_modelo")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                btn_gravar = st.form_submit_button("💾 Guardar alterações")
+            with c2:
+                btn_apagar = st.form_submit_button("🗑️ Apagar")
+
+        if btn_gravar:
+            if pwd_edit != PASSWORD:
+                st.error("🔒 Password incorreta.")
+            elif not alvo or not e_resposta:
+                st.warning("⚠️ Pergunta e resposta são obrigatórias.")
+            else:
+                try:
+                    sb_upsert(alvo, e_resposta, e_email, e_modelo)
+                    st.success("✅ Alterações guardadas.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+
+        if btn_apagar:
+            if pwd_edit != PASSWORD:
+                st.error("🔒 Password incorreta.")
+            elif not alvo:
+                st.warning("⚠️ Seleciona uma pergunta para apagar.")
+            else:
+                try:
+                    sb_delete_by_pergunta(alvo)
+                    st.success("🗑️ Pergunta apagada.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+
+# =========================
+# Importar / Exportar JSON (expander)
+# =========================
+with st.expander("⬇️ Download / ⬆️ Upload da base de conhecimento"):
+    pwd_io = st.text_input("Password", type="password", key="pwd_io")
+
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        if st.button("📥 Descarregar JSON"):
+            if pwd_io != PASSWORD:
+                st.error("🔒 Password incorreta.")
+            else:
+                try:
+                    txt = exportar_toda_base_json()
+                    st.download_button(
+                        label="Download base_conhecimento.json",
+                        data=txt.encode("utf-8"),
+                        file_name=f"base_conhecimento_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json"
+                    )
+                except Exception as e:
+                    st.error(f"Erro ao exportar: {e}")
+
+    with col_d2:
+        up = st.file_uploader("Carregar JSON", type=["json"], key="uploader_json")
+        if st.button("📤 Importar JSON"):
+            if pwd_io != PASSWORD:
+                st.error("🔒 Password incorreta.")
+            elif not up:
+                st.warning("⚠️ Seleciona um ficheiro JSON.")
+            else:
+                try:
+                    dados = json.loads(up.read().decode("utf-8"))
+                    sb_bulk_import(dados)
+                    st.success("✅ Base importada com sucesso.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao importar: {e}")
+
+# =========================
+# Rodapé
+# =========================
+st.markdown("---")
+st.markdown("<div style='font-size:12px;color:#6d5c2f;text-align:center;'>© 2025 AAC</div>", unsafe_allow_html=True)
