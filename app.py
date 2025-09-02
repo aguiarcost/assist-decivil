@@ -141,7 +141,7 @@ st.markdown('<div class="space-xl"></div>', unsafe_allow_html=True)
 # =========================
 st.markdown("### ➕ Criar nova pergunta")
 with st.expander("Abrir/fechar formulário de criação", expanded=False):
-    st.markdown('<div class="caixa">', unsafe_allow_html=True)
+ #   st.markdown('<div class="caixa">', unsafe_allow_html=True)
 
     pwd_create = st.text_input("Password de administração", type="password", key="pwd_create")
     nova_pergunta = st.text_input("Pergunta")
@@ -172,7 +172,7 @@ st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
 # =========================
 st.markdown("### ✏️ Editar pergunta existente")
 with st.expander("Abrir/fechar formulário de edição", expanded=False):
-    st.markdown('<div class="caixa">', unsafe_allow_html=True)
+ #   st.markdown('<div class="caixa">', unsafe_allow_html=True)
 
     base = st.session_state["_base_cache"]
     labels, chaves = _labels_e_chaves(base)
@@ -226,7 +226,7 @@ st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
 # =========================
 st.markdown("### ⬇️⬆️ Exportar / Importar base de conhecimento")
 with st.expander("Abrir/fechar exportação e importação", expanded=False):
-    st.markdown('<div class="caixa">', unsafe_allow_html=True)
+#    st.markdown('<div class="caixa">', unsafe_allow_html=True)
 
     base = st.session_state["_base_cache"]
     json_str = json.dumps(base, ensure_ascii=False, indent=2)
