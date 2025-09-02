@@ -1,229 +1,193 @@
 import json
 import os
+import requests
+from io import BytesIO
 from datetime import datetime
 
 import streamlit as st
-from supabase import create_client, Client
-
-# =========================
-# Configurações
-# =========================
-APP_TITLE = "Felisberto, Assistente Administrativo ACSUTA"
-ADMIN_PASSWORD = "decivil2024"  # password pedida em cada secção admin
-
-TABLE_NAME = "base_conhecimento"  # nome da tua tabela no Supabase
-
-# =========================
-# Streamlit base
-# =========================
-st.set_page_config(page_title=APP_TITLE, layout="wide")
-
-# Estilo laranja e layout do cabeçalho com avatar à esquerda
-st.markdown(
-    """
-    <style>
-      .stApp { background: #fff7ef; }
-      h1.felis-title {
-        color: #ef6c00;
-        margin: 0;
-        line-height: 1.1;
-      }
-      .felis-header {
-        display: flex; align-items: center; gap: 16px; margin: 6px 0 14px 0;
-      }
-      .felis-avatar { width: 84px; height: 84px; border-radius: 10px; }
-      .section-card {
-        background: #fff; padding: 18px 20px; border-radius: 12px;
-        box-shadow: 0 1px 6px rgba(0,0,0,.06);
-      }
-      .divider-space { margin: 26px 0; }
-      .label-small { color:#666; font-size: 12px; margin: -6px 0 8px; }
-      .resp-box {
-        background:#fff; border: 1px solid #f0e0d0; border-radius:10px; padding:14px 16px;
-      }
-    </style>
-    """,
-    unsafe_allow_html=True,
+from assistente import (
+    ler_base_conhecimento,
+    upsert_pergunta,
+    apagar_pergunta,
+    exportar_toda_base_json,
 )
 
-# Cabeçalho com avatar
-left, right = st.columns([1, 10])
-with left:
-    # Certifica-te que o ficheiro existe na raiz do repositório
-    st.image("felisberto_avatar.png", use_column_width=False, width=84, caption=None)
-
-with right:
-    st.markdown(f"<div class='felis-header'><h1 class='felis-title'>{APP_TITLE}</h1></div>", unsafe_allow_html=True)
-
-# Pequeno espaço visual entre a área de Q&A e as áreas administrativas
-st.markdown("<div class='divider-space'></div>", unsafe_allow_html=True)
-
-
 # =========================
-# Funções Supabase
+# Configuração
 # =========================
-@st.cache_resource
-def _sb_client() -> Client:
-    # Lê do Streamlit Secrets (NÃO coloques no GitHub)
-    url = st.secrets.get("SUPABASE_URL", "")
-    key = st.secrets.get("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        st.error("❌ SUPABASE_URL ou SUPABASE_SERVICE_KEY não definidas nos secrets.")
-        st.stop()
-    return create_client(url, key)
+APP_TITLE = "Felisberto, Assistente Administrativo ACSUTA"
+ADMIN_PASSWORD = "decivil2024"
 
-def sb_list_all() -> list[dict]:
-    """Lista todas as Q&A ordenadas por pergunta."""
-    sb = _sb_client()
-    res = sb.table(TABLE_NAME).select("*").order("pergunta").execute()
-    dados = res.data or []
-    out = []
-    for r in dados:
-        out.append({
-            "id": r.get("id"),
-            "pergunta": (r.get("pergunta") or "").strip(),
-            "resposta": (r.get("resposta") or "").strip(),
-            "email": (r.get("email") or "").strip(),
-            "modelo_email": (r.get("modelo_email") or "").strip(),
-            "created_at": r.get("created_at"),
-        })
-    return out
+# -----------------------------
+# Estilos
+# -----------------------------
+st.set_page_config(page_title=APP_TITLE, layout="wide")
 
-def sb_upsert(pergunta: str, resposta: str, email: str, modelo_email: str):
-    """Upsert por pergunta (unique)"""
-    sb = _sb_client()
-    payload = {
-        "pergunta": (pergunta or "").strip(),
-        "resposta": (resposta or "").strip(),
-        "email": (email or "").strip(),
-        "modelo_email": (modelo_email or "").strip(),
-        "created_at": datetime.utcnow().isoformat()
-    }
-    sb.table(TABLE_NAME).upsert(payload, on_conflict="pergunta").execute()
+st.markdown("""
+<style>
+.stApp { background: #fff7ef; }
 
-def sb_delete_by_pergunta(pergunta: str):
-    sb = _sb_client()
-    sb.table(TABLE_NAME).delete().eq("pergunta", pergunta.strip()).execute()
+/* título */
+.app-title { color:#ef6c00; font-weight:800; font-size: 32px; margin: 0; line-height:1.1; }
 
-def sb_bulk_import(items: list[dict]):
-    """Importar lista de Q&A (substitui por pergunta/unique)."""
-    sb = _sb_client()
-    rows = []
-    for it in items:
-        rows.append({
-            "pergunta": (it.get("pergunta") or "").strip(),
-            "resposta": (it.get("resposta") or "").strip(),
-            "email": (it.get("email") or "").strip(),
-            "modelo_email": (it.get("modelo_email") or it.get("modelo") or "").strip(),
-            "created_at": datetime.utcnow().isoformat()
-        })
-    if rows:
-        # upsert em lote
-        sb.table(TABLE_NAME).upsert(rows, on_conflict="pergunta").execute()
+/* header com avatar */
+.header-wrap { display:flex; align-items:center; gap:16px; margin-top:-4px; margin-bottom:10px; }
+.header-wrap img { width:84px; height:auto; border-radius:10px; }
 
+/* separadores */
+hr { border:0; border-top:1px solid #ffd3ad; margin:16px 0; }
 
-# =========================
+/* texto */
+.block-container label, .block-container p { color:#4a3c2f; }
+
+/* botões */
+.stButton > button { background:#ef6c00; border:0; color:white; font-weight:700; }
+.stButton > button:hover { background:#ff7f11; }
+
+/* caixas */
+.resp-box { background:#fff; border:1px solid #f0e0d0; border-radius:10px; padding:14px 16px; }
+
+/* separadores visuais */
+.section-divider { margin:28px 0 12px 0; padding:10px 12px; background:#fff1e3; border:1px solid #ffd3ad; border-radius:10px; color:#a65300; font-weight:800; }
+[data-testid="stExpander"] { margin-top:14px; border:1px solid #ffd3ad; border-radius:10px; box-shadow:0 1px 0 rgba(0,0,0,0.05); }
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# Avatar + título
+# -----------------------------
+def carregar_avatar_bytes():
+    local_path = "felisberto_avatar.png"
+    if os.path.exists(local_path):
+        try:
+            with open(local_path, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    try:
+        raw_url = "https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png"
+        r = requests.get(raw_url, timeout=6)
+        if r.ok and r.content:
+            return r.content
+    except Exception:
+        pass
+    return None
+
+colA, colB = st.columns([1, 10], vertical_alignment="center")
+with colA:
+    avatar_bytes = carregar_avatar_bytes()
+    if avatar_bytes:
+        st.image(BytesIO(avatar_bytes), width=84)
+    else:
+        st.markdown("🧑‍💼")
+with colB:
+    st.markdown(f"<div class='app-title'>{APP_TITLE}</div>", unsafe_allow_html=True)
+
+# -----------------------------
 # 1) Perguntas & Respostas
-# =========================
-st.subheader("📋 Perguntas frequentes")
-with st.container():
-    base = sb_list_all()
-    perguntas = [p["pergunta"] for p in base]
-    pergunta_sel = st.selectbox("Escolha uma pergunta:", [""] + perguntas, index=0)
+# -----------------------------
+st.markdown("### ❓ Perguntas frequentes")
 
-    if pergunta_sel:
-        item = next((x for x in base if x["pergunta"] == pergunta_sel), None)
-        if item:
-            st.markdown("<div class='label-small'>Resposta</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='resp-box'>{item['resposta']}</div>", unsafe_allow_html=True)
+base = ler_base_conhecimento()
+perguntas = [p["pergunta"] for p in base]
+pergunta_sel = st.selectbox("Escolha uma pergunta:", [""] + perguntas, index=0)
 
-            if item.get("email"):
-                st.markdown("**Email de contacto:** " + f"[{item['email']}](mailto:{item['email']})")
+if pergunta_sel:
+    item = next((x for x in base if x["pergunta"] == pergunta_sel), None)
+    if item:
+        st.markdown("### 💡 Resposta do assistente")
+        st.markdown(f"<div class='resp-box'>{item['resposta']}</div>", unsafe_allow_html=True)
 
-            if item.get("modelo_email"):
-                st.markdown("**Modelo de email sugerido:**")
-                st.code(item["modelo_email"], language="text")
+        if item.get("email"):
+            st.markdown(f"**📧 Contacto:** [{item['email']}](mailto:{item['email']})")
 
-# separação visual maior para as secções admin
-st.markdown("<div class='divider-space'></div>", unsafe_allow_html=True)
+        if item.get("modelo_email"):
+            st.markdown("**✉️ Modelo de email sugerido:**")
+            st.code(item["modelo_email"], language="text")
+    else:
+        st.info("Não encontrei essa pergunta na base de conhecimento.")
 
+# -----------------------------
+# 2) Criar nova pergunta
+# -----------------------------
+st.markdown("<div class='section-divider'>Criar nova pergunta</div>", unsafe_allow_html=True)
 
-# =========================
-# 2) Criar nova pergunta (com password)
-# =========================
-with st.expander("➕ Criar nova pergunta"):
-    pwd = st.text_input("Password", type="password")
-    colA, colB = st.columns([1, 1])
+with st.expander("➕ Adicionar"):
+    pwd_new = st.text_input("Password", type="password", key="pwd_new")
+    nova_pergunta = st.text_input("Pergunta", key="nova_pergunta")
+    nova_resposta = st.text_area("Resposta", height=140, key="nova_resposta")
+    novo_email = st.text_input("Email (opcional)", key="novo_email")
+    novo_modelo = st.text_area("Modelo de email (opcional)", height=140, key="novo_modelo")
 
-    with colA:
-        nova_pergunta = st.text_input("Pergunta")
-        nova_resposta = st.text_area("Resposta", height=140)
-    with colB:
-        novo_email = st.text_input("Email (opcional)")
-        novo_modelo = st.text_area("Modelo de email (opcional)", height=140)
-
-    if st.button("Guardar nova pergunta"):
-        if pwd != ADMIN_PASSWORD:
+    if st.button("💾 Guardar nova pergunta"):
+        if pwd_new != ADMIN_PASSWORD:
             st.error("🔒 Password incorreta.")
         elif not nova_pergunta or not nova_resposta:
             st.warning("Preenche pelo menos **Pergunta** e **Resposta**.")
         else:
             try:
-                sb_upsert(nova_pergunta, nova_resposta, novo_email, novo_modelo)
-                st.success("✅ Pergunta criada/atualizada com sucesso.")
+                nova = {
+                    "pergunta": nova_pergunta.strip(),
+                    "resposta": nova_resposta.strip(),
+                    "email": (novo_email or "").strip(),
+                    "modelo_email": (novo_modelo or "").strip()
+                }
+                upsert_pergunta([], nova)
+                st.success("✅ Pergunta criada/atualizada com sucesso. Recarrega a página para ver no dropdown.")
             except Exception as e:
                 st.error(f"Erro ao gravar: {e}")
 
+# -----------------------------
+# 3) Editar / Apagar pergunta
+# -----------------------------
+st.markdown("<div class='section-divider'>Editar / Apagar perguntas</div>", unsafe_allow_html=True)
 
-# =========================
-# 3) Editar / Apagar existente (com password)
-# =========================
-with st.expander("✏️ Editar / Apagar pergunta existente"):
+with st.expander("✏️ Gerir perguntas existentes"):
     pwd2 = st.text_input("Password", type="password", key="pwd_edit")
-    base2 = sb_list_all()
+    base2 = ler_base_conhecimento()
     perguntas2 = [p["pergunta"] for p in base2]
-    alvo = st.selectbox("Seleciona a pergunta a editar:", [""] + perguntas2)
+    alvo = st.selectbox("Seleciona a pergunta:", [""] + perguntas2, key="alvo_editar")
 
     if alvo:
-        atual = next((x for x in base2 if x["pergunta"] == alvo), None)
-        if atual:
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                e_pergunta = st.text_input("Pergunta", value=atual["pergunta"], key="e_pergunta")
-                e_resposta = st.text_area("Resposta", value=atual["resposta"], height=140, key="e_resposta")
-            with col2:
-                e_email = st.text_input("Email (opcional)", value=atual["email"], key="e_email")
-                e_modelo = st.text_area("Modelo de email (opcional)", value=atual["modelo_email"], height=140, key="e_modelo")
+        atual = next((x for x in base2 if x["pergunta"] == alvo), None) or {}
+        e_resposta = st.text_area("Resposta", value=atual.get("resposta", ""), height=140, key="e_resposta")
+        e_email = st.text_input("Email (opcional)", value=atual.get("email", ""), key="e_email")
+        e_modelo = st.text_area("Modelo de email (opcional)", value=atual.get("modelo_email", ""), height=140, key="e_modelo")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("💾 Guardar alterações"):
-                    if pwd2 != ADMIN_PASSWORD:
-                        st.error("🔒 Password incorreta.")
-                    else:
-                        try:
-                            sb_upsert(e_pergunta, e_resposta, e_email, e_modelo)
-                            st.success("✅ Alterações guardadas.")
-                        except Exception as e:
-                            st.error(f"Erro ao gravar: {e}")
-            with c2:
-                if st.button("🗑️ Apagar esta pergunta"):
-                    if pwd2 != ADMIN_PASSWORD:
-                        st.error("🔒 Password incorreta.")
-                    else:
-                        try:
-                            sb_delete_by_pergunta(atual["pergunta"])
-                            st.success("✅ Pergunta apagada.")
-                        except Exception as e:
-                            st.error(f"Erro ao apagar: {e}")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("💾 Guardar alterações"):
+                if pwd2 != ADMIN_PASSWORD:
+                    st.error("🔒 Password incorreta.")
+                else:
+                    try:
+                        nova = {
+                            "pergunta": alvo,
+                            "resposta": e_resposta.strip(),
+                            "email": (e_email or "").strip(),
+                            "modelo_email": (e_modelo or "").strip()
+                        }
+                        upsert_pergunta([], nova)
+                        st.success("✅ Alterações guardadas. Recarrega a página para ver no dropdown.")
+                    except Exception as e:
+                        st.error(f"Erro ao gravar: {e}")
+        with c2:
+            if st.button("🗑️ Apagar pergunta"):
+                if pwd2 != ADMIN_PASSWORD:
+                    st.error("🔒 Password incorreta.")
+                else:
+                    try:
+                        apagar_pergunta([], alvo)
+                        st.success("🗑️ Pergunta apagada. Recarrega a página para atualizar o dropdown.")
+                    except Exception as e:
+                        st.error(f"Erro ao apagar: {e}")
 
-# separação visual
-st.markdown("<div class='divider-space'></div>", unsafe_allow_html=True)
+# -----------------------------
+# 4) Importar / Exportar base
+# -----------------------------
+st.markdown("<div class='section-divider'>Importar / Exportar base de conhecimento</div>", unsafe_allow_html=True)
 
-# =========================
-# 4) Importar / Exportar base (com password)
-# =========================
-with st.expander("⬇️ Download / ⬆️ Upload da base de conhecimento (JSON)"):
+with st.expander("⬇️ Download / ⬆️ Upload JSON"):
     pwd3 = st.text_input("Password", type="password", key="pwd_io")
 
     # Download
@@ -232,19 +196,7 @@ with st.expander("⬇️ Download / ⬆️ Upload da base de conhecimento (JSON)
             st.error("🔒 Password incorreta.")
         else:
             try:
-                data = sb_list_all()
-                txt = json.dumps(
-                    [
-                        {
-                            "pergunta": d["pergunta"],
-                            "resposta": d["resposta"],
-                            "email": d["email"],
-                            "modelo_email": d["modelo_email"],
-                        }
-                        for d in data
-                    ],
-                    ensure_ascii=False, indent=2
-                )
+                txt = exportar_toda_base_json()
                 st.download_button(
                     label="Download base_conhecimento.json",
                     data=txt.encode("utf-8"),
@@ -256,20 +208,25 @@ with st.expander("⬇️ Download / ⬆️ Upload da base de conhecimento (JSON)
 
     # Upload
     up = st.file_uploader("Carregar ficheiro JSON", type=["json"])
-    if up and st.button("📤 Importar JSON"):
+    if st.button("📤 Importar JSON"):
         if pwd3 != ADMIN_PASSWORD:
             st.error("🔒 Password incorreta.")
+        elif not up:
+            st.warning("Seleciona um ficheiro JSON.")
         else:
             try:
                 dados = json.loads(up.read().decode("utf-8"))
                 if not isinstance(dados, list):
                     st.error("O JSON deve ser uma lista de objetos.")
                 else:
+                    from assistente import sb_bulk_import
                     sb_bulk_import(dados)
-                    st.success("✅ Base importada com sucesso.")
+                    st.success("✅ Base importada com sucesso. Recarrega a página para atualizar.")
             except Exception as e:
                 st.error(f"Erro ao importar: {e}")
 
+# -----------------------------
 # Rodapé
-st.markdown("---")
-st.markdown("<small>© 2025 AAC</small>", unsafe_allow_html=True)
+# -----------------------------
+st.markdown("<hr>", unsafe_allow_html=True)
+st.markdown("<div style='font-size:12px;color:#6d5c2f;text-align:center;'>© 2025 AAC</div>", unsafe_allow_html=True)
