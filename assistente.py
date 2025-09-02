@@ -1,106 +1,71 @@
-# assistente.py
-import os
 import json
-from uuid import uuid4
+import os
 import streamlit as st
-from supabase import create_client
+import numpy as np
+from datetime import datetime
+from supabase import create_client  # ✅ corrigido: não importar Client
 
-# --------- CONFIG SUPABASE ---------
+# =========================
+# Configuração Supabase
+# =========================
+TABLE_NAME = "base_conhecimento"
+ADMIN_PASSWORD = "decivil2024"
+
 def _sb_client():
-    # Tenta secrets do Streamlit; se não houver, tenta variáveis de ambiente
-    url = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL", ""))
-    key = st.secrets.get("SUPABASE_SERVICE_KEY", os.getenv("SUPABASE_SERVICE_KEY", ""))
+    url = st.secrets.get("SUPABASE_URL", "")
+    key = st.secrets.get("SUPABASE_SERVICE_KEY", "")
     if not url or not key:
-        raise RuntimeError("❌ SUPABASE_URL e/ou SUPABASE_SERVICE_KEY não estão definidos em secrets nem em variáveis de ambiente.")
+        st.error("❌ SUPABASE_URL ou SUPABASE_SERVICE_KEY não definidos nos secrets.")
+        st.stop()
     return create_client(url, key)
 
-TABELA = "base_conhecimento"
-ADMIN_PWD = "decivil2024"
-
-# --------- LEITURA ---------
-@st.cache_data(ttl=60)
-def carregar_perguntas():
+# =========================
+# Funções Base de Conhecimento
+# =========================
+def ler_base_conhecimento() -> list:
     sb = _sb_client()
-    res = sb.table(TABELA).select("*").order("pergunta").execute()
-    return res.data or []
+    res = sb.table(TABLE_NAME).select("*").order("pergunta").execute()
+    dados = res.data or []
+    out = []
+    for r in dados:
+        out.append({
+            "id": r.get("id"),
+            "pergunta": (r.get("pergunta") or "").strip(),
+            "resposta": (r.get("resposta") or "").strip(),
+            "email": (r.get("email") or "").strip(),
+            "modelo_email": (r.get("modelo_email") or r.get("modelo") or "").strip(),
+            "created_at": r.get("created_at"),
+        })
+    return out
 
-def nomes_perguntas(perguntas):
-    return [p["pergunta"] for p in perguntas]
-
-def obter_por_pergunta(perguntas, pergunta):
-    for p in perguntas:
-        if p["pergunta"] == pergunta:
-            return p
-    return None
-
-# --------- CRIAR ---------
-def criar_pergunta(pergunta, resposta, email, modelo_email):
+def upsert_pergunta(_, nova: dict) -> list:
     sb = _sb_client()
-    novo = {
-        "id": str(uuid4()),
-        "pergunta": pergunta.strip(),
-        "resposta": resposta.strip(),
-        "email": (email or "").strip(),
-        "modelo_email": (modelo_email or "").strip(),
+    payload = {
+        "pergunta": (nova.get("pergunta") or "").strip(),
+        "resposta": (nova.get("resposta") or "").strip(),
+        "email": (nova.get("email") or "").strip(),
+        "modelo_email": (nova.get("modelo_email") or "").strip(),
+        "updated_at": datetime.utcnow().isoformat()
     }
-    sb.table(TABELA).insert(novo).execute()
-    limpar_cache()
-    return novo
+    sb.table(TABLE_NAME).upsert(payload, on_conflict="pergunta").execute()
+    return ler_base_conhecimento()
 
-# --------- ATUALIZAR ---------
-def atualizar_pergunta(reg_id, pergunta, resposta, email, modelo_email):
+def apagar_pergunta(_, pergunta: str) -> list:
     sb = _sb_client()
-    patch = {
-        "pergunta": pergunta.strip(),
-        "resposta": resposta.strip(),
-        "email": (email or "").strip(),
-        "modelo_email": (modelo_email or "").strip(),
-    }
-    sb.table(TABELA).update(patch).eq("id", reg_id).execute()
-    limpar_cache()
+    sb.table(TABLE_NAME).delete().eq("pergunta", pergunta.strip()).execute()
+    return ler_base_conhecimento()
 
-# --------- APAGAR ---------
-def apagar_pergunta(reg_id):
-    sb = _sb_client()
-    sb.table(TABELA).delete().eq("id", reg_id).execute()
-    limpar_cache()
-
-# --------- DOWNLOAD / UPLOAD ---------
-def exportar_base_json():
-    # devolve bytes para st.download_button
-    data = carregar_perguntas()
-    return json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
-
-def importar_base_json(arquivo_bytes):
-    sb = _sb_client()
-    try:
-        conteudo = json.loads(arquivo_bytes.decode("utf-8"))
-        if not isinstance(conteudo, list):
-            raise ValueError("O ficheiro JSON deve conter uma lista de objetos.")
-        # Normaliza campos esperados; gera id quando faltar
-        normalizados = []
-        for item in conteudo:
-            normalizados.append({
-                "id": item.get("id", str(uuid4())),
-                "pergunta": item.get("pergunta", "").strip(),
-                "resposta": item.get("resposta", "").strip(),
-                "email": (item.get("email") or "").strip(),
-                "modelo_email": (item.get("modelo_email") or "").strip(),
-            })
-        # Estratégia simples: upsert por id
-        for bloco in normalizados:
-            sb.table(TABELA).upsert(bloco, on_conflict="id").execute()
-        limpar_cache()
-        return len(normalizados)
-    except json.JSONDecodeError:
-        raise ValueError("JSON inválido. Verifica o ficheiro.")
-
-# --------- UTIL ---------
-def limpar_cache():
-    try:
-        st.cache_data.clear()
-    except Exception:
-        pass
-
-def validar_admin(pwd: str) -> bool:
-    return (pwd or "").strip() == ADMIN_PWD
+def exportar_toda_base_json() -> str:
+    dados = ler_base_conhecimento()
+    return json.dumps(
+        [
+            {
+                "pergunta": d["pergunta"],
+                "resposta": d["resposta"],
+                "email": d.get("email", ""),
+                "modelo_email": d.get("modelo_email", "")
+            }
+            for d in dados
+        ],
+        ensure_ascii=False, indent=2
+    )
