@@ -7,26 +7,31 @@ from assistente import (
     editar_pergunta,
     apagar_pergunta,
     carregar_base,
+    exportar_base_bytes,
+    importar_base_de_bytes,
 )
 
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
-# ---------- Estilo laranja + título com avatar ----------
+# ===== Estilo + Título (avatar) =====
 st.markdown("""
 <style>
 .stApp { background-color: #fff3e0; }
 .titulo-container { display:flex; align-items:center; gap:12px; margin:10px 0 18px 0; }
 .titulo-container img { width:72px; height:auto; }
 .titulo-container h1 { color:#ef6c00; font-size:2.0rem; margin:0; }
-hr { border:none; border-top:1px solid #f0b27a; margin: .8rem 0 1.2rem 0; }
-
-/* espaço extra abaixo do título */
 .block-after-title { margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
-avatar_local = "felisberto_avatar.png"
-avatar_html = f'<img src="{avatar_local}" alt="Felisberto">' if os.path.exists(avatar_local) else ""
+# avatar (local ou raw GitHub)
+avatar_html = ""
+if os.path.exists("felisberto_avatar.png"):
+    avatar_html = '<img src="felisberto_avatar.png" alt="Felisberto">'
+else:
+    # Ajusta o URL raw se necessário
+    GITHUB_RAW = "https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png"
+    avatar_html = f'<img src="{GITHUB_RAW}" alt="Felisberto" onerror="this.style.display=\'none\'">'
 
 st.markdown(f"""
 <div class="titulo-container">
@@ -36,7 +41,29 @@ st.markdown(f"""
 <div class="block-after-title"></div>
 """, unsafe_allow_html=True)
 
-# ---------- Pergunta principal (só dropdown) ----------
+# ===== Password de admin =====
+def obter_admin_password_config():
+    # 1) Streamlit secrets
+    try:
+        if "ADMIN_PASSWORD" in st.secrets:
+            return st.secrets["ADMIN_PASSWORD"]
+    except Exception:
+        pass
+    # 2) Variável de ambiente
+    pw = os.getenv("ADMIN_PASSWORD")
+    if pw:
+        return pw
+    # 3) fallback de desenvolvimento (NÃO usar em produção)
+    return "demo-admin"  # troca isto se quiseres outro fallback local
+
+def pedir_autenticacao():
+    st.text_input("🔐 Password de administração", type="password", key="admin_pw_input")
+    correcto = (st.session_state.get("admin_pw_input") or "") == obter_admin_password_config()
+    if correcto:
+        st.session_state["is_admin"] = True
+    return correcto
+
+# ===== Pergunta (auto-resposta sem botão) =====
 st.subheader("Faça a sua pergunta")
 
 perguntas = carregar_perguntas_frequentes()
@@ -53,66 +80,103 @@ if pergunta_escolhida.strip():
 
 st.markdown("---")
 
-# ---------- Adicionar pergunta (EXPANDER) ----------
-with st.expander("➕ Adicionar nova pergunta", expanded=False):
-    colA, colB = st.columns([1,1])
-    with colA:
-        nova_pergunta = st.text_input("Pergunta", key="nova_pergunta")
-        novo_email = st.text_input("Email de contacto (opcional)", key="novo_email")
-    with colB:
-        novo_modelo = st.text_area("Modelo de email (opcional)", height=120, key="novo_modelo")
-    nova_resposta = st.text_area("Resposta", height=160, key="nova_resposta")
-
-    if st.button("💾 Guardar nova pergunta"):
-        if not (nova_pergunta or "").strip() or not (nova_resposta or "").strip():
-            st.error("A pergunta e a resposta são obrigatórias.")
-        else:
-            ok, msg = adicionar_pergunta(nova_pergunta, nova_resposta, novo_email, novo_modelo)
-            if ok:
-                st.success(msg)
-                st.experimental_rerun()
-            else:
-                st.error(msg)
+# ===== Import/Export (protegido por password) =====
+with st.expander("📦 Importar / Exportar base de conhecimento (admin)", expanded=False):
+    if st.session_state.get("is_admin"):
+        col_exp, col_imp = st.columns(2)
+        with col_exp:
+            st.caption("Descarregar uma cópia da base atual:")
+            data = exportar_base_bytes()
+            st.download_button(
+                label="⬇️ Download base_conhecimento.json",
+                data=data,
+                file_name="base_conhecimento.json",
+                mime="application/json"
+            )
+        with col_imp:
+            st.caption("Importar (substitui a base atual):")
+            up = st.file_uploader("Escolher JSON", type="json", key="upload_base")
+            if up:
+                ok, msg = importar_base_de_bytes(up.read())
+                if ok:
+                    st.success(msg)
+                    st.experimental_rerun()
+                else:
+                    st.error(msg)
+    else:
+        st.info("Área reservada. Introduza a password para administrar.")
+        pedir_autenticacao()
 
 st.markdown("---")
 
-# ---------- Editar / Apagar pergunta (EXPANDER) ----------
-with st.expander("✏️ Editar ou apagar pergunta", expanded=False):
-    base = carregar_base()
-    lista = [it["pergunta"] for it in base]
-    alvo = st.selectbox("Escolha a pergunta a editar:", [""] + lista, key="editar_alvo")
+# ===== Adicionar (protegido por password) =====
+with st.expander("➕ Adicionar nova pergunta (admin)", expanded=False):
+    if st.session_state.get("is_admin"):
+        colA, colB = st.columns([1,1])
+        with colA:
+            nova_pergunta = st.text_input("Pergunta", key="nova_pergunta")
+            novo_email = st.text_input("Email de contacto (opcional)", key="novo_email")
+        with colB:
+            novo_modelo = st.text_area("Modelo de email (opcional)", height=120, key="novo_modelo")
+        nova_resposta = st.text_area("Resposta", height=160, key="nova_resposta")
 
-    if alvo:
-        atual = next((it for it in base if it["pergunta"] == alvo), None)
-        if atual:
-            ep = st.text_input("Pergunta", value=atual.get("pergunta", ""), key="ep")
-            er = st.text_area("Resposta", value=atual.get("resposta", ""), key="er", height=160)
-            ee = st.text_input("Email", value=atual.get("email", ""), key="ee")
-            em = st.text_area("Modelo de email (opcional)", value=atual.get("modelo", ""), key="em", height=120)
+        if st.button("💾 Guardar nova pergunta"):
+            if not (nova_pergunta or "").strip() or not (nova_resposta or "").strip():
+                st.error("A pergunta e a resposta são obrigatórias.")
+            else:
+                ok, msg = adicionar_pergunta(nova_pergunta, nova_resposta, novo_email, novo_modelo)
+                if ok:
+                    st.success(msg)
+                    st.experimental_rerun()
+                else:
+                    st.error(msg)
+    else:
+        st.info("Área reservada. Introduza a password para administrar.")
+        pedir_autenticacao()
 
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("💾 Guardar alterações", type="primary"):
-                    if not ep.strip():
-                        st.error("A pergunta não pode ficar vazia.")
-                    else:
-                        ok, msg = editar_pergunta(alvo, ep, er, ee, em)
-                        if ok:
-                            st.success(msg)
-                            st.experimental_rerun()
+st.markdown("---")
+
+# ===== Editar/Apagar (protegido por password) =====
+with st.expander("✏️ Editar ou apagar pergunta (admin)", expanded=False):
+    if st.session_state.get("is_admin"):
+        base = carregar_base()
+        lista = [it["pergunta"] for it in base]
+        alvo = st.selectbox("Escolha a pergunta a editar:", [""] + lista, key="editar_alvo")
+
+        if alvo:
+            atual = next((it for it in base if it["pergunta"] == alvo), None)
+            if atual:
+                ep = st.text_input("Pergunta", value=atual.get("pergunta", ""), key="ep")
+                er = st.text_area("Resposta", value=atual.get("resposta", ""), key="er", height=160)
+                ee = st.text_input("Email", value=atual.get("email", ""), key="ee")
+                em = st.text_area("Modelo de email (opcional)", value=atual.get("modelo", ""), key="em", height=120)
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("💾 Guardar alterações", type="primary"):
+                        if not ep.strip():
+                            st.error("A pergunta não pode ficar vazia.")
                         else:
-                            st.error(msg)
-            with c2:
-                with st.popover("🗑️ Apagar pergunta"):
-                    st.write("Esta ação é irreversível.")
-                    conf = st.checkbox("Confirmo que quero apagar.")
-                    if st.button("Apagar definitivamente", disabled=not conf):
-                        ok, msg = apagar_pergunta(alvo)
-                        if ok:
-                            st.success(msg)
-                            st.experimental_rerun()
-                        else:
-                            st.error(msg)
+                            ok, msg = editar_pergunta(alvo, ep, er, ee, em)
+                            if ok:
+                                st.success(msg)
+                                st.experimental_rerun()
+                            else:
+                                st.error(msg)
+                with c2:
+                    with st.popover("🗑️ Apagar pergunta"):
+                        st.write("Esta ação é irreversível.")
+                        conf = st.checkbox("Confirmo que quero apagar.")
+                        if st.button("Apagar definitivamente", disabled=not conf):
+                            ok, msg = apagar_pergunta(alvo)
+                            if ok:
+                                st.success(msg)
+                                st.experimental_rerun()
+                            else:
+                                st.error(msg)
+    else:
+        st.info("Área reservada. Introduza a password para administrar.")
+        pedir_autenticacao()
 
 st.markdown("---")
 st.markdown("<small>© 2025 AAC</small>", unsafe_allow_html=True)
