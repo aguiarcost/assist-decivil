@@ -3,7 +3,6 @@ import os
 
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
 
-# ---------- Helpers JSON ----------
 def _ler_json(caminho, default):
     if os.path.exists(caminho):
         try:
@@ -39,91 +38,25 @@ def _deduplicar(lista):
         by_q[norm["pergunta"].lower()] = norm
     return list(by_q.values())
 
-# ---------- API pública ----------
 def carregar_base():
-    base = _ler_json(CAMINHO_CONHECIMENTO, [])
-    return _deduplicar(base)
+    return _deduplicar(_ler_json(CAMINHO_CONHECIMENTO, []))
 
 def guardar_base(nova_lista):
-    nova = _deduplicar(nova_lista)
-    _escrever_json(CAMINHO_CONHECIMENTO, nova)
+    _escrever_json(CAMINHO_CONHECIMENTO, _deduplicar(nova_lista))
 
 def carregar_perguntas_frequentes():
     base = carregar_base()
     return sorted({it["pergunta"] for it in base if it["pergunta"]})
 
 def gerar_resposta(pergunta):
+    """Devolve (resposta, modelo_email)."""
     base = carregar_base()
     alvo = pergunta.strip().lower()
     for it in base:
         if it["pergunta"].strip().lower() == alvo:
-            partes = []
-            if it["resposta"]:
-                partes.append(it["resposta"])
-            if it["email"]:
-                partes.append(f"**📧 Contacto:** [{it['email']}](mailto:{it['email']})")
-            if it["modelo"]:
-                partes.append("**📨 Modelo de email sugerido:**\n```\n" + it["modelo"] + "\n```")
-            return "\n\n".join(partes) if partes else "Não há conteúdo definido para esta pergunta."
-    return "Não encontrei resposta para essa pergunta."
-
-def adicionar_pergunta(pergunta, resposta, email="", modelo=""):
-    base = carregar_base()
-    if any(it["pergunta"].strip().lower() == pergunta.strip().lower() for it in base):
-        return False, "Já existe uma pergunta com o mesmo texto."
-    base.append({
-        "pergunta": pergunta.strip(),
-        "resposta": (resposta or "").strip(),
-        "email": (email or "").strip(),
-        "modelo": (modelo or "").strip(),
-    })
-    guardar_base(base)
-    return True, "Pergunta adicionada com sucesso."
-
-def editar_pergunta(pergunta_original, nova_pergunta, nova_resposta, novo_email="", novo_modelo=""):
-    base = carregar_base()
-    # evitar duplicado ao renomear
-    if (nova_pergunta.strip().lower() != pergunta_original.strip().lower() and
-        any(it["pergunta"].strip().lower() == nova_pergunta.strip().lower() for it in base)):
-            return False, "Já existe outra pergunta com esse texto."
-
-    alterada = False
-    for it in base:
-        if it["pergunta"].strip().lower() == pergunta_original.strip().lower():
-            it["pergunta"] = nova_pergunta.strip()
-            it["resposta"] = (nova_resposta or "").strip()
-            it["email"] = (novo_email or "").strip()
-            it["modelo"] = (novo_modelo or "").strip()
-            alterada = True
-            break
-    if not alterada:
-        return False, "Não encontrei a pergunta a editar."
-
-    guardar_base(base)
-    return True, "Alterações guardadas."
-
-def apagar_pergunta(pergunta):
-    base = carregar_base()
-    nova = [it for it in base if it["pergunta"].strip().lower() != pergunta.strip().lower()]
-    if len(nova) == len(base):
-        return False, "Não encontrei a pergunta para apagar."
-    guardar_base(nova)
-    return True, "Pergunta apagada."
-
-# ---------- Import/Export ----------
-def exportar_base_bytes():
-    base = carregar_base()
-    return json.dumps(base, ensure_ascii=False, indent=2).encode("utf-8")
-
-def importar_base_de_bytes(file_bytes):
-    try:
-        data = json.loads(file_bytes.decode("utf-8"))
-        if not isinstance(data, list):
-            return False, "O JSON deve ser uma lista de objetos."
-        nova = _deduplicar(data)  # normaliza + dedup
-        if not nova:
-            return False, "O ficheiro não contém entradas válidas."
-        guardar_base(nova)
-        return True, "Base importada e guardada com sucesso."
-    except Exception as e:
-        return False, f"Erro a ler JSON: {e}"
+            resposta = it.get("resposta", "")
+            if it.get("email"):
+                resposta += f"\n\n**📧 Contacto:** [{it['email']}](mailto:{it['email']})"
+            modelo = it.get("modelo", "")
+            return resposta, modelo
+    return "Não encontrei resposta para essa pergunta.", ""
