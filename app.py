@@ -40,7 +40,7 @@ st.markdown(f"""
 <div class="block-after-title"></div>
 """, unsafe_allow_html=True)
 
-# ==================== Password (por secção) ====================
+# ==================== Password helper (por secção) ====================
 ADMIN_PASSWORD_DEFAULT = "decivil2024"
 
 def obter_admin_password_config():
@@ -68,9 +68,13 @@ pergunta_escolhida = st.selectbox(
 )
 
 if pergunta_escolhida.strip():
-    resposta_md = gerar_resposta(pergunta_escolhida)
+    resposta_txt, modelo_txt = gerar_resposta(pergunta_escolhida)
     st.markdown("### 💡 Resposta do assistente")
-    st.markdown(resposta_md, unsafe_allow_html=True)
+    st.markdown(resposta_txt, unsafe_allow_html=True)
+
+    if modelo_txt:
+        st.markdown("### 📨 Modelo de email sugerido")
+        st.code(modelo_txt, language="text")
 
 st.markdown("---")
 
@@ -89,7 +93,7 @@ with st.expander("➕ Adicionar nova pergunta"):
         novo_modelo = st.text_area("Modelo de email (opcional)", height=120, key="novo_modelo")
     nova_resposta = st.text_area("Resposta", height=160, key="nova_resposta")
 
-    btn_add = st.button("💾 Guardar nova pergunta", disabled=not autorizado_add)
+    btn_add = st.button("💾 Guardar nova pergunta", disabled=not autorizado_add, key="btn_add_nova")
     if not autorizado_add and (nova_pergunta or nova_resposta or novo_email or novo_modelo):
         st.info("Introduza a password para ativar o botão de guardar.")
 
@@ -127,10 +131,10 @@ with st.expander("✏️ Editar ou apagar pergunta"):
 
             c1, c2 = st.columns(2)
             with c1:
-                st.button("💾 Guardar alterações", type="primary", key="btn_save_edit", disabled=not autorizado_edit)
+                save_clicked = st.button("💾 Guardar alterações", type="primary", key="btn_save_edit", disabled=not autorizado_edit)
                 if not autorizado_edit and (ep != atual.get("pergunta") or er != atual.get("resposta") or ee != atual.get("email") or em != atual.get("modelo")):
                     st.info("Introduza a password para ativar o botão de guardar.")
-                if autorizado_edit and st.session_state.get("btn_save_edit"):
+                if autorizado_edit and save_clicked:
                     if not ep.strip():
                         st.error("A pergunta não pode ficar vazia.")
                     else:
@@ -141,10 +145,10 @@ with st.expander("✏️ Editar ou apagar pergunta"):
                         else:
                             st.error(msg)
             with c2:
-                st.button("🗑️ Apagar pergunta", key="btn_delete", disabled=not autorizado_edit)
+                del_clicked = st.button("🗑️ Apagar pergunta", key="btn_delete", disabled=not autorizado_edit)
                 if not autorizado_edit and alvo:
                     st.info("Introduza a password para ativar o botão de apagar.")
-                if autorizado_edit and st.session_state.get("btn_delete"):
+                if autorizado_edit and del_clicked:
                     ok, msg = apagar_pergunta(alvo)
                     if ok:
                         st.success(msg)
