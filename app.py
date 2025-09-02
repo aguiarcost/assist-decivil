@@ -7,59 +7,33 @@ from assistente import (
     sb_upsert,
     sb_delete_by_pergunta,
     exportar_toda_base_json,
+    sb_bulk_import,
     PASSWORD,
 )
-from io import BytesIO
-from supabase import create_client
-
-def _sb_client():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_SERVICE_KEY"]
-    return create_client(url, key)
-
-def _sb_client():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_SERVICE_KEY"]
-    return create_client(url, key)
-
 
 # =========================
-# Configuração
+# Configuração & Estilos
 # =========================
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
+
 APP_TITLE = "Felisberto, Assistente Administrativo ACSUTA"
 
-# =========================
-# Estilos
-# =========================
 st.markdown(
     """
     <style>
     .stApp { background: #fff7ef; }
-    h1.felis-title {
-        color:#ef6c00; font-weight:800; font-size: 32px; margin: 0; line-height:1.1;
-    }
-    .felis-header {
-        display:flex; align-items:center; gap:12px; margin-top:-4px; margin-bottom:8px;
-    }
+    .felis-title { color:#ef6c00; font-weight:800; font-size: 32px; margin:0; line-height:1.1; }
+    .felis-header { display:flex; align-items:center; gap:12px; margin-top:-4px; margin-bottom:10px; }
     .felis-avatar { width:84px; height:auto; border-radius:10px; }
     hr { border:0; border-top:1px solid #ffd3ad; margin:16px 0; }
-    .resp-box {
-        background:#fff; border:1px solid #f0e0d0; border-radius:10px; padding:14px 16px;
+    .resp-box { background:#fff; border:1px solid #f0e0d0; border-radius:10px; padding:14px 16px; }
+    .section-title {
+      margin: 28px 0 8px 0; padding: 10px 12px; background:#fff1e3;
+      border:1px solid #ffd3ad; border-radius:10px; color:#a65300; font-weight:800;
     }
-    .section-divider { 
-      margin: 28px 0 14px 0; 
-      padding: 10px 12px; 
-      background:#fff1e3; 
-      border:1px solid #ffd3ad; 
-      border-radius:10px; 
-      color:#a65300; 
-      font-weight:800; 
-    }
-    [data-testid="stExpander"] { 
-      margin-top: 14px; 
-      border: 1px solid #ffd3ad; 
-      border-radius: 10px; 
+    .spacer { height: 8px; }
+    [data-testid="stExpander"] {
+      margin-top: 10px; border: 1px solid #ffd3ad; border-radius: 10px;
       box-shadow: 0 1px 0 rgba(0,0,0,0.05);
     }
     </style>
@@ -70,44 +44,47 @@ st.markdown(
 # =========================
 # Header com avatar
 # =========================
-colA, colB = st.columns([1, 10], vertical_alignment="center")
-with colA:
-    avatar_path = "felisberto_avatar.png"
-    if os.path.exists(avatar_path):
-        st.image(avatar_path, width=84)
-    else:
-        st.markdown("🧑‍💼")  # fallback caso não encontre o ficheiro
-with colB:
-    st.markdown(f"<h1 class='felis-title'>{APP_TITLE}</h1>", unsafe_allow_html=True)
+st.markdown("<div class='felis-header'>", unsafe_allow_html=True)
+avatar_path = "felisberto_avatar.png"
+if os.path.exists(avatar_path):
+    st.image(avatar_path, width=84)
+else:
+    st.markdown("🧑‍💼")  # fallback
 
-st.markdown("<div class='divider-space'></div>", unsafe_allow_html=True)
+st.markdown(f"<h1 class='felis-title'>{APP_TITLE}</h1></div>", unsafe_allow_html=True)
 
 # =========================
 # Perguntas & Respostas
 # =========================
-st.subheader("📋 Perguntas frequentes")
+st.markdown("<div class='section-title'>📋 Perguntas frequentes</div>", unsafe_allow_html=True)
 
+# lê dados (com cache interna do módulo)
 base = ler_base_conhecimento()
 perguntas = [p["pergunta"] for p in base]
-pergunta_sel = st.selectbox("Escolha uma pergunta:", [""] + perguntas, index=0)
 
+col_q, = st.columns(1)
+with col_q:
+    pergunta_sel = st.selectbox("Escolha uma pergunta:", [""] + perguntas, index=0)
+
+# resposta dinâmica
 if pergunta_sel:
     entrada = next((x for x in base if x["pergunta"] == pergunta_sel), None)
     if entrada:
         st.markdown("### 💡 Resposta do assistente")
         st.markdown(f"<div class='resp-box'>{entrada['resposta']}</div>", unsafe_allow_html=True)
 
-        if entrada.get("email"):
+        if (entrada.get("email") or "").strip():
             st.markdown("**📧 Contacto:** " + f"[{entrada['email']}](mailto:{entrada['email']})")
 
-        if entrada.get("modelo_email"):
+        if (entrada.get("modelo_email") or "").strip():
             st.markdown("**✉️ Modelo de email sugerido:**")
             st.code(entrada["modelo_email"], language="text")
 
-st.markdown("<div class='divider-space'></div>", unsafe_allow_html=True)
+# dar mais “respiro” antes da área admin
+st.markdown("<div class='spacer'></div><div class='spacer'></div>", unsafe_allow_html=True)
 
 # =========================
-# Criar nova pergunta
+# Criar nova pergunta (expander)
 # =========================
 with st.expander("➕ Criar nova pergunta"):
     with st.form("form_criar", clear_on_submit=False):
@@ -127,23 +104,25 @@ with st.expander("➕ Criar nova pergunta"):
             try:
                 sb_upsert(nova_pergunta, nova_resposta, novo_email, novo_modelo)
                 st.success("✅ Pergunta criada/atualizada com sucesso.")
+                st.rerun()  # atualiza dropdown imediatamente
             except Exception as e:
                 st.error(f"Erro: {e}")
 
 # =========================
-# Editar / Apagar pergunta
+# Editar / Apagar pergunta (expander)
 # =========================
-with st.expander("✏️ Editar ou apagar pergunta"):
+with st.expander("✏️ Editar ou apagar pergunta existente"):
     base2 = ler_base_conhecimento()
     perguntas2 = [p["pergunta"] for p in base2]
+
     if not perguntas2:
         st.info("Base de conhecimento vazia.")
     else:
+        alvo = st.selectbox("Pergunta a editar:", [""] + perguntas2, key="sel_edit")
+        atual = next((x for x in base2 if x["pergunta"] == alvo), None) or {}
+
         with st.form("form_editar", clear_on_submit=False):
             pwd_edit = st.text_input("Password", type="password", key="pwd_edit")
-            alvo = st.selectbox("Escolha a pergunta:", [""] + perguntas2)
-            atual = next((x for x in base2 if x["pergunta"] == alvo), None) or {}
-
             e_resposta = st.text_area("Resposta", value=atual.get("resposta", ""), height=140)
             e_email = st.text_input("Email (opcional)", value=atual.get("email", ""), key="e_email")
             e_modelo = st.text_area("Modelo de email (opcional)", value=atual.get("modelo_email", ""), height=140, key="e_modelo")
@@ -163,6 +142,7 @@ with st.expander("✏️ Editar ou apagar pergunta"):
                 try:
                     sb_upsert(alvo, e_resposta, e_email, e_modelo)
                     st.success("✅ Alterações guardadas.")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Erro: {e}")
 
@@ -175,11 +155,12 @@ with st.expander("✏️ Editar ou apagar pergunta"):
                 try:
                     sb_delete_by_pergunta(alvo)
                     st.success("🗑️ Pergunta apagada.")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Erro: {e}")
 
 # =========================
-# Importar / Exportar JSON
+# Importar / Exportar JSON (expander)
 # =========================
 with st.expander("⬇️ Download / ⬆️ Upload da base de conhecimento"):
     pwd_io = st.text_input("Password", type="password", key="pwd_io")
@@ -211,12 +192,9 @@ with st.expander("⬇️ Download / ⬆️ Upload da base de conhecimento"):
             else:
                 try:
                     dados = json.loads(up.read().decode("utf-8"))
-                    if not isinstance(dados, list):
-                        st.error("O JSON deve ser uma lista de objetos.")
-                    else:
-                        from assistente import sb_bulk_import
-                        sb_bulk_import(dados)
-                        st.success("✅ Base importada com sucesso.")
+                    sb_bulk_import(dados)
+                    st.success("✅ Base importada com sucesso.")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao importar: {e}")
 
