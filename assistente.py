@@ -120,8 +120,7 @@ def importar_base_de_bytes(file_bytes):
         data = json.loads(file_bytes.decode("utf-8"))
         if not isinstance(data, list):
             return False, "O JSON deve ser uma lista de objetos."
-        # normalizar + deduplicar
-        nova = _deduplicar(data)
+        nova = _deduplicar(data)  # normaliza + dedup
         if not nova:
             return False, "O ficheiro não contém entradas válidas."
         guardar_base(nova)
