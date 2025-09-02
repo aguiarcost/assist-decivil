@@ -13,60 +13,81 @@ from assistente import (
 
 st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="wide")
 
-# ===== Estilo + Título (avatar) =====
+# ==================== Estilo & Título (avatar) ====================
 st.markdown("""
 <style>
 .stApp { background-color: #fff3e0; }
-.titulo-container { display:flex; align-items:center; gap:12px; margin:10px 0 18px 0; }
+.titulo-container { display:flex; align-items:center; gap:12px; margin:10px 0 12px 0; }
 .titulo-container img { width:72px; height:auto; }
 .titulo-container h1 { color:#ef6c00; font-size:2.0rem; margin:0; }
-.block-after-title { margin-bottom: 10px; }
+.block-after-title { margin-bottom: 6px; }
 </style>
 """, unsafe_allow_html=True)
 
-# avatar (local ou raw GitHub)
-avatar_html = ""
-if os.path.exists("felisberto_avatar.png"):
-    avatar_html = '<img src="felisberto_avatar.png" alt="Felisberto">'
-else:
-    # Ajusta o URL raw se necessário
-    GITHUB_RAW = "https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png"
-    avatar_html = f'<img src="{GITHUB_RAW}" alt="Felisberto" onerror="this.style.display=\'none\'">'
+def _avatar_html():
+    # 1) tenta local
+    if os.path.exists("felisberto_avatar.png"):
+        return '<img src="felisberto_avatar.png" alt="Felisberto">'
+    # 2) tenta URL raw do GitHub (ajusta se mudares o repo/branch)
+    raw_url = "https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png"
+    # onerror: esconde se falhar
+    return f'<img src="{raw_url}" alt="Felisberto" onerror="this.style.display=\'none\'">'
 
 st.markdown(f"""
 <div class="titulo-container">
-  {avatar_html}
+  {_avatar_html()}
   <h1>Felisberto, Assistente Administrativo ACSUTA</h1>
 </div>
 <div class="block-after-title"></div>
 """, unsafe_allow_html=True)
 
-# ===== Password de admin =====
+# ==================== Password Admin (default = decivil2024) ====================
+ADMIN_PASSWORD_DEFAULT = "decivil2024"
+
 def obter_admin_password_config():
-    # 1) Streamlit secrets
+    """Prioridade: secrets['ADMIN_PASSWORD'] > env ADMIN_PASSWORD > default."""
     try:
         if "ADMIN_PASSWORD" in st.secrets:
-            return st.secrets["ADMIN_PASSWORD"]
+            return str(st.secrets["ADMIN_PASSWORD"])
     except Exception:
         pass
-    # 2) Variável de ambiente
     pw = os.getenv("ADMIN_PASSWORD")
     if pw:
         return pw
-    # 3) fallback de desenvolvimento (NÃO usar em produção)
-    return "demo-admin"  # troca isto se quiseres outro fallback local
+    return ADMIN_PASSWORD_DEFAULT
 
 def pedir_autenticacao():
-    st.text_input("🔐 Password de administração", type="password", key="admin_pw_input")
-    correcto = (st.session_state.get("admin_pw_input") or "") == obter_admin_password_config()
-    if correcto:
-        st.session_state["is_admin"] = True
-    return correcto
+    pw_input = st.text_input("🔐 Password de administração", type="password", key="admin_pw_input")
+    if pw_input:
+        if pw_input == obter_admin_password_config():
+            st.session_state["is_admin"] = True
+            st.success("Sessão admin ativa.")
+        else:
+            st.session_state["is_admin"] = False
+            st.error("Password incorreta.")
+    return st.session_state.get("is_admin", False)
 
-# ===== Pergunta (auto-resposta sem botão) =====
+# Painel rápido de administração
+st.markdown("#### Administração")
+if not st.session_state.get("is_admin", False):
+    pedir_autenticacao()
+else:
+    col_ok1, col_ok2 = st.columns([3,1])
+    with col_ok1:
+        st.success("Admin ligado.")
+    with col_ok2:
+        if st.button("Terminar sessão admin"):
+            st.session_state["is_admin"] = False
+            st.experimental_rerun()
+
+st.markdown("---")
+
+# ==================== Pergunta principal (dropdown sem botão) ====================
 st.subheader("Faça a sua pergunta")
 
 perguntas = carregar_perguntas_frequentes()
+if not perguntas:
+    st.info("Ainda não existem perguntas na base. Vá a **Adicionar nova pergunta (admin)** para criar a primeira.")
 pergunta_escolhida = st.selectbox(
     "Escolha uma pergunta frequente:",
     [""] + perguntas,
@@ -80,7 +101,7 @@ if pergunta_escolhida.strip():
 
 st.markdown("---")
 
-# ===== Import/Export (protegido por password) =====
+# ==================== Import/Export (admin) ====================
 with st.expander("📦 Importar / Exportar base de conhecimento (admin)", expanded=False):
     if st.session_state.get("is_admin"):
         col_exp, col_imp = st.columns(2)
@@ -91,7 +112,8 @@ with st.expander("📦 Importar / Exportar base de conhecimento (admin)", expand
                 label="⬇️ Download base_conhecimento.json",
                 data=data,
                 file_name="base_conhecimento.json",
-                mime="application/json"
+                mime="application/json",
+                key="download_base"
             )
         with col_imp:
             st.caption("Importar (substitui a base atual):")
@@ -105,11 +127,10 @@ with st.expander("📦 Importar / Exportar base de conhecimento (admin)", expand
                     st.error(msg)
     else:
         st.info("Área reservada. Introduza a password para administrar.")
-        pedir_autenticacao()
 
 st.markdown("---")
 
-# ===== Adicionar (protegido por password) =====
+# ==================== Adicionar (admin) ====================
 with st.expander("➕ Adicionar nova pergunta (admin)", expanded=False):
     if st.session_state.get("is_admin"):
         colA, colB = st.columns([1,1])
@@ -132,11 +153,10 @@ with st.expander("➕ Adicionar nova pergunta (admin)", expanded=False):
                     st.error(msg)
     else:
         st.info("Área reservada. Introduza a password para administrar.")
-        pedir_autenticacao()
 
 st.markdown("---")
 
-# ===== Editar/Apagar (protegido por password) =====
+# ==================== Editar / Apagar (admin) ====================
 with st.expander("✏️ Editar ou apagar pergunta (admin)", expanded=False):
     if st.session_state.get("is_admin"):
         base = carregar_base()
@@ -176,7 +196,6 @@ with st.expander("✏️ Editar ou apagar pergunta (admin)", expanded=False):
                                 st.error(msg)
     else:
         st.info("Área reservada. Introduza a password para administrar.")
-        pedir_autenticacao()
 
 st.markdown("---")
 st.markdown("<small>© 2025 AAC</small>", unsafe_allow_html=True)
