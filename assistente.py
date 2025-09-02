@@ -1,20 +1,9 @@
-import os
 import json
-import numpy as np
-import streamlit as st
+import os
 
-# OpenAI nova API (>=1.0.0)
-try:
-    from openai import OpenAI
-except Exception:
-    OpenAI = None
-
-# Caminhos de dados
 CAMINHO_CONHECIMENTO = "base_conhecimento.json"
-CAMINHO_EMBEDDINGS_FAQ = "base_vectorizada.json"          # embeddings das perguntas/respostas (FAQ)
-CAMINHO_EMBEDDINGS_DOCS = "base_docs_vectorizada.json"    # embeddings de documentos/URLs (opcional)
 
-# ----- Utilitários de leitura/escrita JSON -----
+# ---------- Helpers JSON ----------
 def _ler_json(caminho, default):
     if os.path.exists(caminho):
         try:
@@ -24,197 +13,103 @@ def _ler_json(caminho, default):
             return default
     return default
 
-# ----- Carregadores -----
-def carregar_perguntas_frequentes():
+def _escrever_json(caminho, conteudo):
+    with open(caminho, "w", encoding="utf-8") as f:
+        json.dump(conteudo, f, ensure_ascii=False, indent=2)
+
+# ---------- API pública do módulo ----------
+def carregar_base():
     base = _ler_json(CAMINHO_CONHECIMENTO, [])
-    perguntas = [p.get("pergunta", "") for p in base if isinstance(p, dict)]
-    # Remover vazios e duplicados, mantendo ordem aproximada
-    visto = set()
-    limpas = []
-    for q in perguntas:
-        if q and q not in visto:
-            visto.add(q)
-            limpas.append(q)
-    return limpas
+    # normalizar estrutura
+    normalizada = []
+    for it in base:
+        if isinstance(it, dict) and it.get("pergunta"):
+            normalizada.append({
+                "pergunta": it.get("pergunta", "").strip(),
+                "resposta": (it.get("resposta") or "").strip(),
+                "email": (it.get("email") or "").strip(),
+                "modelo": (it.get("modelo") or it.get("modelo_email") or "").strip(),
+            })
+    return normalizada
 
-def _carregar_faq_e_embeddings():
-    conhecimento = _ler_json(CAMINHO_CONHECIMENTO, [])
-    emb_faq = _ler_json(CAMINHO_EMBEDDINGS_FAQ, [])
-    return conhecimento, emb_faq
-
-def _carregar_docs_embeddings():
-    emb_docs = _ler_json(CAMINHO_EMBEDDINGS_DOCS, [])
-    return emb_docs
-
-# ----- Similaridade -----
-def _cosine_similarity(v1, v2):
-    v1, v2 = np.array(v1), np.array(v2)
-    n1, n2 = np.linalg.norm(v1), np.linalg.norm(v2)
-    if n1 == 0 or n2 == 0:
-        return 0.0
-    return float(np.dot(v1, v2) / (n1 * n2))
-
-def _top_k_similares(embedding_consulta, lista_embeddings, k=3):
-    if not lista_embeddings:
-        return []
-    scores = []
-    for idx, item in enumerate(lista_embeddings):
-        emb = item.get("embedding")
-        if not emb:
+def guardar_base(nova_lista):
+    # deduplicar por pergunta (case-insensitive)
+    by_q = {}
+    for it in nova_lista:
+        q = (it.get("pergunta") or "").strip()
+        if not q:
             continue
-        score = _cosine_similarity(embedding_consulta, emb)
-        scores.append((idx, score))
-    scores.sort(key=lambda x: x[1], reverse=True)
-    return scores[:k]
+        chave = q.lower()
+        by_q[chave] = {
+            "pergunta": q,
+            "resposta": (it.get("resposta") or "").strip(),
+            "email": (it.get("email") or "").strip(),
+            "modelo": (it.get("modelo") or "").strip(),
+        }
+    _escrever_json(CAMINHO_CONHECIMENTO, list(by_q.values()))
 
-# ----- Embeddings OpenAI -----
-def _get_openai_client():
-    if OpenAI is None:
-        return None
-    # Lê de st.secrets ou variável de ambiente
-    api_key = None
-    try:
-        if "OPENAI_API_KEY" in st.secrets:
-            api_key = st.secrets["OPENAI_API_KEY"]
-    except Exception:
-        pass
-    if not api_key:
-        api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        return None
-    return OpenAI(api_key=api_key)
+def carregar_perguntas_frequentes():
+    base = carregar_base()
+    # ordenar alfabeticamente (podes trocar por outra ordem se quiseres)
+    perguntas = sorted({it["pergunta"] for it in base if it["pergunta"]})
+    return perguntas
 
-def _gerar_embedding(texto):
-    """
-    Gera embedding via OpenAI. Se não houver chave, devolve None (fallback).
-    """
-    client = _get_openai_client()
-    if not client:
-        return None
-    try:
-        # Modelo recomendado atual
-        resp = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=texto
-        )
-        return resp.data[0].embedding
-    except Exception as e:
-        # Em caso de erro de API, retorna None para permitir fallback (exato/TF-IDF)
-        return None
+def gerar_resposta(pergunta):
+    """Devolve markdown pronto a mostrar, com resposta + email + modelo (se existirem)."""
+    base = carregar_base()
+    alvo = pergunta.strip().lower()
+    for it in base:
+        if it["pergunta"].strip().lower() == alvo:
+            partes = []
+            if it["resposta"]:
+                partes.append(it["resposta"])
+            if it["email"]:
+                partes.append(f"**📧 Contacto:** [{it['email']}](mailto:{it['email']})")
+            if it["modelo"]:
+                partes.append("**📨 Modelo de email sugerido:**\n```\n" + it["modelo"] + "\n```")
+            return "\n\n".join(partes) if partes else "Não há conteúdo definido para esta pergunta."
+    return "Não encontrei resposta para essa pergunta."
 
-# ----- Procura exacta na base manual -----
-def _procura_exata(conhecimento, pergunta):
-    p_norm = pergunta.strip().lower()
-    for entrada in conhecimento:
-        if entrada.get("pergunta", "").strip().lower() == p_norm:
-            return entrada
-    return None
+def adicionar_pergunta(pergunta, resposta, email="", modelo=""):
+    base = carregar_base()
+    # bloquear duplicados (case-insensitive)
+    if any(it["pergunta"].strip().lower() == pergunta.strip().lower() for it in base):
+        return False, "Já existe uma pergunta com o mesmo texto."
+    base.append({
+        "pergunta": pergunta.strip(),
+        "resposta": (resposta or "").strip(),
+        "email": (email or "").strip(),
+        "modelo": (modelo or "").strip(),
+    })
+    guardar_base(base)
+    return True, "Pergunta adicionada com sucesso."
 
-# ----- Geração de Resposta -----
-def gerar_resposta(pergunta, usar_embedding=False, top_k_docs=2):
-    """
-    - Tenta resposta exata pela base.
-    - Se não encontrar ou se usar_embedding=True, recorre a embeddings:
-        * primeiro compara com embeddings de FAQ (para obter resposta + modelo/email)
-        * depois, se necessário, usa embeddings de documentos para evidências
-    """
-    conhecimento, emb_faq = _carregar_faq_e_embeddings()
+def editar_pergunta(pergunta_original, nova_pergunta, nova_resposta, novo_email="", novo_modelo=""):
+    base = carregar_base()
+    # se mudar o texto da pergunta, garantir que não duplica outra
+    if (nova_pergunta.strip().lower() != pergunta_original.strip().lower() and
+        any(it["pergunta"].strip().lower() == nova_pergunta.strip().lower() for it in base)):
+        return False, "Já existe outra pergunta com esse texto."
 
-    # 1) Se há match exato, responde já (modo rápido)
-    match = _procura_exata(conhecimento, pergunta)
-    if match and not usar_embedding:
-        resposta = match.get("resposta", "").strip()
-        email = (match.get("email") or "").strip()
-        modelo = (match.get("modelo") or match.get("modelo_email") or "").strip()
+    alterada = False
+    for it in base:
+        if it["pergunta"].strip().lower() == pergunta_original.strip().lower():
+            it["pergunta"] = nova_pergunta.strip()
+            it["resposta"] = (nova_resposta or "").strip()
+            it["email"] = (novo_email or "").strip()
+            it["modelo"] = (novo_modelo or "").strip()
+            alterada = True
+            break
+    if not alterada:
+        return False, "Não encontrei a pergunta a editar."
 
-        partes = []
-        if resposta:
-            partes.append(resposta)
-        if email:
-            partes.append(f"**📧 Contacto:** [{email}](mailto:{email})")
-        if modelo:
-            partes.append("**📨 Modelo de email sugerido:**\n```\n" + modelo + "\n```")
-        return "\n\n".join(partes) if partes else "Não encontrei conteúdo para esta pergunta."
+    guardar_base(base)
+    return True, "Alterações guardadas."
 
-    # 2) Embeddings (se pedido ou se não houve match exato)
-    emb_q = _gerar_embedding(pergunta)
-    if emb_q is None:
-        # Sem chave ou falha -> fallback: tentativa simples de contains na base
-        for entrada in conhecimento:
-            if entrada.get("pergunta", "").lower() in pergunta.lower():
-                resposta = entrada.get("resposta", "").strip()
-                email = (entrada.get("email") or "").strip()
-                modelo = (entrada.get("modelo") or entrada.get("modelo_email") or "").strip()
-                partes = []
-                if resposta:
-                    partes.append(resposta)
-                if email:
-                    partes.append(f"**📧 Contacto:** [{email}](mailto:{email})")
-                if modelo:
-                    partes.append("**📨 Modelo de email sugerido:**\n```\n" + modelo + "\n```")
-                return "\n\n".join(partes) if partes else "Não encontrei conteúdo para esta pergunta."
-        return "Não encontrei uma resposta adequada (e a API de embeddings não está configurada)."
-
-    # 2a) Procurar nas FAQs por similaridade
-    top_faq = _top_k_similares(
-        emb_q,
-        [e for e in emb_faq if isinstance(e, dict) and "embedding" in e],
-        k=1
-    )
-    resposta_principal = ""
-    email_principal = ""
-    modelo_principal = ""
-
-    if top_faq:
-        idx, score = top_faq[0]
-        candidato = emb_faq[idx]
-        # Embeddings de FAQ devem guardar "pergunta" (texto) para mapear à base
-        per_cand = candidato.get("pergunta", "")
-        if per_cand:
-            ent = _procura_exata(conhecimento, per_cand)
-            if ent:
-                resposta_principal = ent.get("resposta", "").strip()
-                email_principal = (ent.get("email") or "").strip()
-                modelo_principal = (ent.get("modelo") or ent.get("modelo_email") or "").strip()
-
-    # 2b) Procurar nos documentos (se houver base)
-    emb_docs = _carregar_docs_embeddings()
-    evidencias = []
-    if emb_docs:
-        top_docs = _top_k_similares(
-            emb_q,
-            [d for d in emb_docs if isinstance(d, dict) and "embedding" in d],
-            k=top_k_docs
-        )
-        for idx, s in top_docs:
-            item = emb_docs[idx]
-            trecho = item.get("texto", "")
-            origem = item.get("origem") or item.get("fonte") or "documento"
-            pagina = item.get("pagina")
-            # guarda evidências curtas
-            if trecho:
-                preview = trecho.strip().replace("\n", " ")
-                if len(preview) > 400:
-                    preview = preview[:400] + "..."
-                etiqueta = f"{origem}" + (f", pág. {pagina}" if pagina else "")
-                evidencias.append(f"> _{preview}_  \n— _{etiqueta}_")
-
-    # Montagem final
-    partes = []
-    if resposta_principal:
-        partes.append(resposta_principal)
-    if email_principal:
-        partes.append(f"**📧 Contacto:** [{email_principal}](mailto:{email_principal})")
-    if modelo_principal:
-        partes.append("**📨 Modelo de email sugerido:**\n```\n" + modelo_principal + "\n```")
-
-    if not partes and evidencias:
-        # Se não há resposta de FAQ, devolve evidências dos docs
-        partes.append("**Informação relevante encontrada nos documentos:**\n" + "\n\n".join(evidencias))
-    elif evidencias:
-        partes.append("\n**Fontes relacionadas (dos documentos):**\n" + "\n\n".join(evidencias))
-
-    if not partes:
-        return "Não encontrei uma resposta adequada."
-
-    return "\n\n".join(partes)
+def apagar_pergunta(pergunta):
+    base = carregar_base()
+    nova = [it for it in base if it["pergunta"].strip().lower() != pergunta.strip().lower()]
+    if len(nova) == len(base):
+        return False, "Não encontrei a pergunta para apagar."
+    guardar_base(nova)
+    return True, "Pergunta apagada."
