@@ -78,36 +78,50 @@ if pergunta_escolhida.strip():
 st.markdown("---")
 
 # ==================== 2) Adicionar nova pergunta (com password) ====================
-with st.expander("➕ Adicionar nova pergunta"):
-    col_pw, _ = st.columns([1,3])
-    with col_pw:
-        pw_add = st.text_input("Password (admin)", type="password", key="pw_add")
-    autorizado_add = valida_pw(pw_add)
-
-    colA, colB = st.columns([1,1])
-    with colA:
-        nova_pergunta = st.text_input("Pergunta", key="nova_pergunta")
-        novo_email = st.text_input("Email de contacto (opcional)", key="novo_email")
-    with colB:
-        novo_modelo = st.text_area("Modelo de email (opcional)", height=120, key="novo_modelo")
-    nova_resposta = st.text_area("Resposta", height=160, key="nova_resposta")
-
-    btn_add = st.button("💾 Guardar nova pergunta", disabled=not autorizado_add, key="btn_add_nova")
-    if not autorizado_add and (nova_pergunta or nova_resposta or novo_email or novo_modelo):
-        st.info("Introduza a password para ativar o botão de guardar.")
-
-    if btn_add:
-        if not (nova_pergunta or "").strip() or not (nova_resposta or "").strip():
-            st.error("A pergunta e a resposta são obrigatórias.")
-        else:
-            ok, msg = adicionar_pergunta(nova_pergunta, nova_resposta, novo_email, novo_modelo)
-            if ok:
-                st.success(msg)
-                st.experimental_rerun()
-            else:
-                st.error(msg)
 
 st.markdown("---")
+with st.expander("➕ Criar nova pergunta"):
+    with st.form("form_criar_pergunta", clear_on_submit=False):
+        st.caption("Preenche os campos abaixo para adicionar uma nova pergunta à base de conhecimento.")
+        pwd = st.text_input("Password (obrigatória)", type="password", help="Necessária para criar perguntas.")
+        nova_pergunta = st.text_input("Pergunta")
+        nova_resposta = st.text_area("Resposta", height=160)
+        novo_email = st.text_input("Email (opcional)")
+        novo_modelo = st.text_area("Modelo de email (opcional)", height=160)
+        btn_guardar = st.form_submit_button("💾 Guardar pergunta")
+
+    if btn_guardar:
+        if pwd != "decivil2024":
+            st.error("❌ Password incorreta.")
+        elif not nova_pergunta or not nova_resposta:
+            st.warning("⚠️ A 'Pergunta' e a 'Resposta' são obrigatórias.")
+        else:
+            # carregar base existente em segurança
+            try:
+                if os.path.exists(CAMINHO_CONHECIMENTO):
+                    with open(CAMINHO_CONHECIMENTO, "r", encoding="utf-8") as f:
+                        base_existente = json.load(f)
+                else:
+                    base_existente = []
+            except json.JSONDecodeError:
+                base_existente = []
+
+            # upsert por pergunta (evita duplicados)
+            todas = {p["pergunta"]: p for p in base_existente if "pergunta" in p}
+            todas[nova_pergunta] = {
+                "pergunta": nova_pergunta.strip(),
+                "resposta": nova_resposta.strip(),
+                # mantém as chaves que o teu assistente já usa
+                "email": (novo_email or "").strip(),
+                "modelo_email": (novo_modelo or "").strip(),
+            }
+
+            # guardar
+            with open(CAMINHO_CONHECIMENTO, "w", encoding="utf-8") as f:
+                json.dump(list(todas.values()), f, ensure_ascii=False, indent=2)
+
+            st.success("✅ Pergunta adicionada/atualizada com sucesso.")
+            st.info("🔁 Se o menu de perguntas não refletir já esta nova entrada, recarrega a app.")
 
 # ==================== 3) Editar / Apagar (com password) ====================
 with st.expander("✏️ Editar ou apagar pergunta"):
