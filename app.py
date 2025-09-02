@@ -44,7 +44,6 @@ st.markdown(f"""
 ADMIN_PASSWORD_DEFAULT = "decivil2024"
 
 def obter_admin_password_config():
-    # prioridade: secrets > env > default
     try:
         if "ADMIN_PASSWORD" in st.secrets:
             return str(st.secrets["ADMIN_PASSWORD"])
