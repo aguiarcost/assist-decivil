@@ -107,7 +107,7 @@ def _labels_e_chaves(base):
 # Secção: Perguntas & Respostas
 # =========================
 st.markdown("### ❓ Perguntas e respostas")
-st.markdown('<div class="caixa">', unsafe_allow_html=True)
+# st.markdown('<div class="caixa">', unsafe_allow_html=True)
 
 base = st.session_state["_base_cache"]
 labels, chaves = _labels_e_chaves(base)
