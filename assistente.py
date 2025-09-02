@@ -1,87 +1,138 @@
+# assistente.py
+import os
 import json
-import numpy as np
-from datetime import datetime
 import streamlit as st
-from supabase import create_client
+from typing import List, Dict, Any, Optional
 
-# -----------------------------
-# Configuração Supabase
-# -----------------------------
-def _sb_client():
-    url = st.secrets.get("SUPABASE_URL", "")
-    key = st.secrets.get("SUPABASE_SERVICE_KEY", "")
-    if not url or not key:
-        st.error("❌ SUPABASE_URL ou SUPABASE_SERVICE_KEY não definidos nos secrets.")
-        st.stop()
-    return create_client(url, key)
+# ---------- Config ----------
+LOCAL_JSON = "base_conhecimento.json"
+TABELA = "base_conhecimento"
 
-TABLE_NAME = "base_conhecimento"
+# ---------- Supabase client ----------
+def _get_supabase():
+    """Devolve o cliente Supabase se existir configuração; caso contrário None."""
+    try:
+        from supabase import create_client  # requer 'supabase' no requirements
+        url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
+        key = st.secrets.get("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+        if not url or not key:
+            return None
+        return create_client(url, key)
+    except Exception:
+        return None
 
-# -----------------------------
-# Funções de acesso à base
-# -----------------------------
-def carregar_perguntas_frequentes() -> list[str]:
-    sb = _sb_client()
-    res = sb.table(TABLE_NAME).select("pergunta").order("pergunta").execute()
-    return [r["pergunta"] for r in (res.data or []) if r.get("pergunta")]
+# ---------- Fallback JSON ----------
+def _ler_json() -> List[Dict[str, Any]]:
+    if not os.path.exists(LOCAL_JSON):
+        return []
+    try:
+        with open(LOCAL_JSON, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # normalizar chaves
+            norm = []
+            for x in data:
+                norm.append({
+                    "id": x.get("id"),
+                    "pergunta": x.get("pergunta", "").strip(),
+                    "resposta": x.get("resposta", "").strip(),
+                    "email": x.get("email", "").strip(),
+                    "modelo_email": x.get("modelo_email", "").strip(),
+                })
+            return norm
+    except Exception:
+        return []
 
-def obter_resposta(pergunta: str) -> tuple[str, str]:
-    """Devolve (resposta, modelo_email) para a pergunta, ou (None,None)."""
-    sb = _sb_client()
-    res = sb.table(TABLE_NAME).select("*").eq("pergunta", pergunta).execute()
-    if res.data:
-        item = res.data[0]
-        resposta = item.get("resposta", "")
-        modelo = item.get("modelo_email", "")
-        email = item.get("email", "")
-        texto = resposta
-        if email:
-            texto += f"\n\n**📧 Contacto:** [{email}](mailto:{email})"
-        return texto, modelo
-    return None, None
+def _gravar_json(registos: List[Dict[str, Any]]) -> None:
+    with open(LOCAL_JSON, "w", encoding="utf-8") as f:
+        json.dump(registos, f, ensure_ascii=False, indent=2)
 
-def upsert_pergunta(pergunta: str, resposta: str, email: str, modelo_email: str):
-    sb = _sb_client()
-    payload = {
-        "pergunta": (pergunta or "").strip(),
-        "resposta": (resposta or "").strip(),
+# ---------- API pública usada no app ----------
+def ler_base_conhecimento() -> List[Dict[str, Any]]:
+    """Lê toda a base (Supabase se existir; senão JSON)."""
+    sb = _get_supabase()
+    if sb:
+        # selecionar colunas relevantes
+        res = sb.table(TABELA).select("id, pergunta, resposta, email, modelo_email").order("pergunta").execute()
+        linhas = res.data or []
+        # garantir tipos/normalização
+        for x in linhas:
+            x["pergunta"] = (x.get("pergunta") or "").strip()
+            x["resposta"] = (x.get("resposta") or "").strip()
+            x["email"] = (x.get("email") or "").strip()
+            x["modelo_email"] = (x.get("modelo_email") or "").strip()
+        # manter cópia local (cache/backup)
+        if linhas:
+            _gravar_json(linhas)
+        return linhas
+    # fallback local
+    return _ler_json()
+
+def criar_pergunta(pergunta: str, resposta: str, email: str = "", modelo_email: str = "") -> None:
+    reg = {
+        "pergunta": pergunta.strip(),
+        "resposta": resposta.strip(),
         "email": (email or "").strip(),
         "modelo_email": (modelo_email or "").strip(),
-        "created_at": datetime.utcnow().isoformat()
     }
-    sb.table(TABLE_NAME).upsert(payload, on_conflict="pergunta").execute()
+    sb = _get_supabase()
+    if sb:
+        sb.table(TABELA).insert(reg).execute()
+        # atualizar cache local
+        todos = ler_base_conhecimento()
+        _gravar_json(todos)
+        return
+    # local JSON
+    todos = _ler_json()
+    # evitar duplicados por pergunta
+    dedup = {x["pergunta"]: x for x in todos}
+    dedup[reg["pergunta"]] = reg
+    _gravar_json(list(dedup.values()))
 
-def apagar_pergunta(pergunta: str):
-    sb = _sb_client()
-    sb.table(TABLE_NAME).delete().eq("pergunta", pergunta.strip()).execute()
+def editar_pergunta(id_ou_pergunta: str, nova_pergunta: str, nova_resposta: str,
+                    novo_email: str = "", novo_modelo_email: str = "") -> None:
+    sb = _get_supabase()
+    payload = {
+        "pergunta": nova_pergunta.strip(),
+        "resposta": nova_resposta.strip(),
+        "email": (novo_email or "").strip(),
+        "modelo_email": (novo_modelo_email or "").strip(),
+    }
+    if sb:
+        # Aceita id (uuid) ou a pergunta como “chave”
+        if _parece_uuid(id_ou_pergunta):
+            sb.table(TABELA).update(payload).eq("id", id_ou_pergunta).execute()
+        else:
+            sb.table(TABELA).update(payload).eq("pergunta", id_ou_pergunta).execute()
+        _gravar_json(ler_base_conhecimento())
+        return
+    # local JSON
+    todos = _ler_json()
+    houve = False
+    for x in todos:
+        if x.get("id") == id_ou_pergunta or x.get("pergunta") == id_ou_pergunta:
+            x.update(payload)
+            houve = True
+            break
+    if not houve:
+        # se não encontrou, cria
+        todos.append(payload)
+    _gravar_json(todos)
 
-def importar_perguntas(novas: list[dict]):
-    sb = _sb_client()
-    rows = []
-    for it in novas:
-        if not isinstance(it, dict):
-            continue
-        if "pergunta" in it and "resposta" in it:
-            rows.append({
-                "pergunta": (it.get("pergunta") or "").strip(),
-                "resposta": (it.get("resposta") or "").strip(),
-                "email": (it.get("email") or "").strip(),
-                "modelo_email": (it.get("modelo_email") or it.get("modelo") or "").strip(),
-                "created_at": datetime.utcnow().isoformat()
-            })
-    if rows:
-        sb.table(TABLE_NAME).upsert(rows, on_conflict="pergunta").execute()
+def apagar_pergunta(id_ou_pergunta: str) -> None:
+    sb = _get_supabase()
+    if sb:
+        if _parece_uuid(id_ou_pergunta):
+            sb.table(TABELA).delete().eq("id", id_ou_pergunta).execute()
+        else:
+            sb.table(TABELA).delete().eq("pergunta", id_ou_pergunta).execute()
+        _gravar_json(ler_base_conhecimento())
+        return
+    # local JSON
+    todos = _ler_json()
+    novos = [x for x in todos if x.get("id") != id_ou_pergunta and x.get("pergunta") != id_ou_pergunta]
+    _gravar_json(novos)
 
-def exportar_perguntas() -> str:
-    sb = _sb_client()
-    res = sb.table(TABLE_NAME).select("*").order("pergunta").execute()
-    dados = res.data or []
-    export = []
-    for d in dados:
-        export.append({
-            "pergunta": d.get("pergunta", ""),
-            "resposta": d.get("resposta", ""),
-            "email": d.get("email", ""),
-            "modelo_email": d.get("modelo_email", ""),
-        })
-    return json.dumps(export, ensure_ascii=False, indent=2)
+def _parece_uuid(valor: str) -> bool:
+    if not valor or not isinstance(valor, str):
+        return False
+    return len(valor) in (36, 32) and "-" in valor
