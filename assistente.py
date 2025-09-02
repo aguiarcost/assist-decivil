@@ -4,6 +4,16 @@ import json
 import streamlit as st
 from typing import List, Dict, Any, Optional
 
+from supabase import create_client
+
+@st.cache_data(show_spinner=False)
+def carregar_perguntas_frequentes():
+    sb = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
+    res = sb.table("base_conhecimento").select("id, pergunta, resposta, email, modelo_email") \
+             .order("pergunta").execute()
+    # devolve só o que precisas
+    return res.data or []
+
 # ---------- Config ----------
 LOCAL_JSON = "base_conhecimento.json"
 TABELA = "base_conhecimento"
