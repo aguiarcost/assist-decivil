@@ -1,58 +1,6 @@
-[
-  {
-    "pergunta": "Como posso reservar uma sala?",
-    "resposta": "Os pedidos de reserva de salas devem ser feitos diretamente ao GOP.",
-    "email": "gop@tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Pedido de reserva de sala\\n\\nExmos. Senhores,\\n\\nVenho por este meio solicitar a reserva de uma sala para [finalidade] no dia [data], entre as [hora de início] e as [hora de fim].\\n\\nCom os melhores cumprimentos,\\n[Seu nome]",
-    "embedding": [0.1234, -0.5678, 0.9101, ...]  // Placeholder: vetor aleatório de 1536 elementos (gere real executando o script)
-  },
-  {
-    "pergunta": "Como posso pedir estacionamento?",
-    "resposta": "O pedido de estacionamento deve ser feito com pelo menos 24 horas de antecedência.",
-    "email": "estacionamento@tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Pedido de estacionamento\\n\\nExmos. Senhores,\\n\\nVenho por este meio solicitar o acesso ao parque de estacionamento para o dia [data], no âmbito da minha atividade no DECivil.\\n\\nCom os melhores cumprimentos,\\n[Seu nome]",
-    "embedding": [-0.4321, 0.8765, -0.1098, ...]  // Placeholder
-  },
-  {
-    "pergunta": "Como posso pedir apoio informático?",
-    "resposta": "Todos os pedidos de apoio informático devem ser dirigidos à equipa técnica do DECivil.",
-    "email": "apoiotecnico@civil.tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Pedido de apoio informático\\n\\nBoa tarde,\\n\\nSolicito apoio informático relativamente a [descrever o problema].\\n\\nCom os melhores cumprimentos,\\n[Seu nome]",
-    "embedding": [0.2468, -0.1357, 0.9753, ...]  // Placeholder
-  },
-  {
-    "pergunta": "Como pedir acesso Wi-Fi para reuniões?",
-    "resposta": "O acesso Wi-Fi temporário para reuniões deve ser solicitado à DSI.",
-    "email": "dsi@tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Acesso Wi-Fi temporário\\n\\nExmos. Senhores,\\n\\nSolicito o acesso Wi-Fi temporário para a reunião agendada no dia [data], com participantes externos.\\n\\nCom os melhores cumprimentos,\\n[Seu nome]",
-    "embedding": [0.1111, -0.2222, 0.3333, ...]  // Placeholder
-  },
-  {
-    "pergunta": "Como registar um convidado no sistema informático?",
-    "resposta": "O registo de convidados é feito online através da página do SI do Técnico.",
-    "email": "",
-    "modelo_email": "Aceda a: https://si.tecnico.ulisboa.pt/servicos/autenticacao-e-acesso/pessoa-externa-convidado/",
-    "embedding": [-0.4444, 0.5555, -0.6666, ...]  // Placeholder
-  },
-  {
-    "pergunta": "Como comunicar uma avaria no telefone?",
-    "resposta": "As avarias em telefones devem ser comunicadas ao Núcleo de Comunicações.",
-    "email": "nucleo.comunicacoes@tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Avaria no telefone\\n\\nExmos. Senhores,\\n\\nVenho por este meio reportar uma avaria no telefone [número ou localização], que se encontra [descrição da avaria].\\n\\nCom os melhores cumprimentos,\\n[Seu nome]",
-    "embedding": [0.7777, -0.8888, 0.9999, ...]  // Placeholder
-  },
-  {
-    "pergunta": "Como pedir uma declaração à DRH?",
-    "resposta": "As declarações devem ser pedidas diretamente ao Núcleo de Declarações da DRH.",
-    "email": "nudi.declaracoes@drh.tecnico.ulisboa.pt",
-    "modelo_email": "Assunto: Pedido de declaração\\n\\nExmos. Senhores,\\n\\nVenho por este meio solicitar uma declaração relativa a [especificar o conteúdo da declaração].\\n\\nCom os melhores cumprimentos,\\n[Seu nome]",
-    "embedding": [-0.0001, 0.0002, -0.0003, ...]  // Placeholder
-  },
-  {
-    "pergunta": "Como posso fazer fotocópias de exames?",
-    "resposta": "As fotocópias de exames devem ser feitas na reprografia ou diretamente pelo docente, em caso de impossibilidade.",
-    "email": "",
-    "modelo_email": "",
-    "embedding": [0.1212, -0.3434, 0.5656, ...]  // Placeholder
-  }
-]
+{
+  "model": "text-embedding-3-small",
+  "created": "2025-09-02T15:03:30.250078Z",
+  "count": 0,
+  "items": []
+}
