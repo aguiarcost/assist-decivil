@@ -17,45 +17,42 @@ def _escrever_json(caminho, conteudo):
     with open(caminho, "w", encoding="utf-8") as f:
         json.dump(conteudo, f, ensure_ascii=False, indent=2)
 
-# ---------- API pública do módulo ----------
+def _normalizar_item(it):
+    if not isinstance(it, dict):
+        return None
+    q = (it.get("pergunta") or "").strip()
+    if not q:
+        return None
+    return {
+        "pergunta": q,
+        "resposta": (it.get("resposta") or "").strip(),
+        "email": (it.get("email") or "").strip(),
+        "modelo": (it.get("modelo") or it.get("modelo_email") or "").strip(),
+    }
+
+def _deduplicar(lista):
+    by_q = {}
+    for it in lista:
+        norm = _normalizar_item(it)
+        if not norm:
+            continue
+        by_q[norm["pergunta"].lower()] = norm
+    return list(by_q.values())
+
+# ---------- API pública ----------
 def carregar_base():
     base = _ler_json(CAMINHO_CONHECIMENTO, [])
-    # normalizar estrutura
-    normalizada = []
-    for it in base:
-        if isinstance(it, dict) and it.get("pergunta"):
-            normalizada.append({
-                "pergunta": it.get("pergunta", "").strip(),
-                "resposta": (it.get("resposta") or "").strip(),
-                "email": (it.get("email") or "").strip(),
-                "modelo": (it.get("modelo") or it.get("modelo_email") or "").strip(),
-            })
-    return normalizada
+    return _deduplicar(base)
 
 def guardar_base(nova_lista):
-    # deduplicar por pergunta (case-insensitive)
-    by_q = {}
-    for it in nova_lista:
-        q = (it.get("pergunta") or "").strip()
-        if not q:
-            continue
-        chave = q.lower()
-        by_q[chave] = {
-            "pergunta": q,
-            "resposta": (it.get("resposta") or "").strip(),
-            "email": (it.get("email") or "").strip(),
-            "modelo": (it.get("modelo") or "").strip(),
-        }
-    _escrever_json(CAMINHO_CONHECIMENTO, list(by_q.values()))
+    nova = _deduplicar(nova_lista)
+    _escrever_json(CAMINHO_CONHECIMENTO, nova)
 
 def carregar_perguntas_frequentes():
     base = carregar_base()
-    # ordenar alfabeticamente (podes trocar por outra ordem se quiseres)
-    perguntas = sorted({it["pergunta"] for it in base if it["pergunta"]})
-    return perguntas
+    return sorted({it["pergunta"] for it in base if it["pergunta"]})
 
 def gerar_resposta(pergunta):
-    """Devolve markdown pronto a mostrar, com resposta + email + modelo (se existirem)."""
     base = carregar_base()
     alvo = pergunta.strip().lower()
     for it in base:
@@ -72,7 +69,6 @@ def gerar_resposta(pergunta):
 
 def adicionar_pergunta(pergunta, resposta, email="", modelo=""):
     base = carregar_base()
-    # bloquear duplicados (case-insensitive)
     if any(it["pergunta"].strip().lower() == pergunta.strip().lower() for it in base):
         return False, "Já existe uma pergunta com o mesmo texto."
     base.append({
@@ -86,7 +82,7 @@ def adicionar_pergunta(pergunta, resposta, email="", modelo=""):
 
 def editar_pergunta(pergunta_original, nova_pergunta, nova_resposta, novo_email="", novo_modelo=""):
     base = carregar_base()
-    # se mudar o texto da pergunta, garantir que não duplica outra
+    # evitar duplicado ao renomear
     if (nova_pergunta.strip().lower() != pergunta_original.strip().lower() and
         any(it["pergunta"].strip().lower() == nova_pergunta.strip().lower() for it in base)):
         return False, "Já existe outra pergunta com esse texto."
@@ -113,3 +109,22 @@ def apagar_pergunta(pergunta):
         return False, "Não encontrei a pergunta para apagar."
     guardar_base(nova)
     return True, "Pergunta apagada."
+
+# ---------- Import/Export ----------
+def exportar_base_bytes():
+    base = carregar_base()
+    return json.dumps(base, ensure_ascii=False, indent=2).encode("utf-8")
+
+def importar_base_de_bytes(file_bytes):
+    try:
+        data = json.loads(file_bytes.decode("utf-8"))
+        if not isinstance(data, list):
+            return False, "O JSON deve ser uma lista de objetos."
+        # normalizar + deduplicar
+        nova = _deduplicar(data)
+        if not nova:
+            return False, "O ficheiro não contém entradas válidas."
+        guardar_base(nova)
+        return True, "Base importada e guardada com sucesso."
+    except Exception as e:
+        return False, f"Erro a ler JSON: {e}"
