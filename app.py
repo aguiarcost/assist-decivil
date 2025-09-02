@@ -1,234 +1,226 @@
-import os
+# app.py
 import json
-import requests
-from io import BytesIO
+import os
 import streamlit as st
-from datetime import datetime
 
 from assistente import (
-    carregar_perguntas_frequentes,
-    obter_resposta,
-    upsert_pergunta,
+    ler_base_conhecimento,
+    criar_pergunta,
+    editar_pergunta,
     apagar_pergunta,
-    importar_perguntas,
-    exportar_perguntas,
 )
 
-# =========================
-# Configuração
-# =========================
-APP_TITLE = "Felisberto, Assistente Administrativo ACSUTA"
+# ---------- Config geral ----------
+st.set_page_config(page_title="Felisberto, Assistente Administrativo ACSUTA", layout="centered")
+
 ADMIN_PASSWORD = "decivil2024"
+AVATAR_PATH = "felisberto_avatar.png"
 
-# -----------------------------
-# Estilos
-# -----------------------------
-st.set_page_config(page_title=APP_TITLE, layout="wide")
+# ---------- Estilo ----------
+st.markdown(
+    """
+    <style>
+    .stApp { background: #fff7ef; }
+    h1, h2, h3 { color: #ef6c00; }
+    .caixa { background: white; border: 1px solid #ffd6b3; border-radius: 12px; padding: 18px 20px; }
+    .secao { margin-top: 28px; }
+    .resposta-box { background: #fff; border-left: 4px solid #ef6c00; padding: 14px 16px; border-radius: 8px; }
+    .subtle { color: #7f8c8d; font-size: 0.9rem; }
+    .space-lg { margin-top: 34px; }
+    .space-md { margin-top: 18px; }
+    .space-sm { margin-top: 10px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-st.markdown("""
-<style>
-.stApp { background: #fff7ef; }
-
-/* título */
-.app-title { color:#ef6c00; font-weight:800; font-size: 32px; margin: 0; line-height:1.1; }
-
-/* header com avatar */
-.header-wrap { display:flex; align-items:center; gap:16px; margin-top:-4px; margin-bottom:10px; }
-.header-wrap img { width:84px; height:auto; border-radius:10px; }
-
-/* separadores */
-hr { border:0; border-top:1px solid #ffd3ad; margin:16px 0; }
-
-/* texto */
-.block-container label, .block-container p { color:#4a3c2f; }
-
-/* botões */
-.stButton > button { background:#ef6c00; border:0; color:white; font-weight:700; }
-.stButton > button:hover { background:#ff7f11; }
-
-/* caixas */
-.resp-box { background:#fff; border:1px solid #f0e0d0; border-radius:10px; padding:14px 16px; }
-
-/* separadores visuais */
-.section-divider { margin:28px 0 12px 0; padding:10px 12px; background:#fff1e3; border:1px solid #ffd3ad; border-radius:10px; color:#a65300; font-weight:800; }
-[data-testid="stExpander"] { margin-top:14px; border:1px solid #ffd3ad; border-radius:10px; box-shadow:0 1px 0 rgba(0,0,0,0.05); }
-</style>
-""", unsafe_allow_html=True)
-
-# -----------------------------
-# Avatar + título
-# -----------------------------
-def carregar_avatar_bytes():
-    local_path = "felisberto_avatar.png"
-    if os.path.exists(local_path):
-        try:
-            with open(local_path, "rb") as f:
-                return f.read()
-        except Exception:
-            pass
+# ---------- Header com avatar ----------
+col_logo, col_titulo = st.columns([1, 5])
+with col_logo:
     try:
-        raw_url = "https://raw.githubusercontent.com/aguiarcost/assist-decivil/main/felisberto_avatar.png"
-        r = requests.get(raw_url, timeout=6)
-        if r.ok and r.content:
-            return r.content
+        with open(AVATAR_PATH, "rb") as _:
+            st.image(AVATAR_PATH, width=80)
     except Exception:
-        pass
-    return None
+        st.write("")  # ignora se não existir
+with col_titulo:
+    st.title("Felisberto, Assistente Administrativo ACSUTA")
 
-colA, colB = st.columns([1, 10], vertical_alignment="center")
-with colA:
-    avatar_bytes = carregar_avatar_bytes()
-    if avatar_bytes:
-        st.image(BytesIO(avatar_bytes), width=84)
-    else:
-        st.markdown("🧑‍💼")
-with colB:
-    st.markdown(f"<div class='app-title'>{APP_TITLE}</div>", unsafe_allow_html=True)
+st.write("Selecione uma pergunta da lista para ver a resposta. As restantes secções são para manutenção da base de conhecimento (com password).")
 
-# -----------------------------
-# 1) Perguntas & Respostas
-# -----------------------------
-st.markdown("### ❓ Perguntas frequentes")
+# ---------- Estado/base em cache ----------
+@st.cache_data(show_spinner=False)
+def _carregar_base():
+    return ler_base_conhecimento()
 
-base = ler_base_conhecimento()
-perguntas = [p["pergunta"] for p in base]
-pergunta_sel = st.selectbox("Escolha uma pergunta:", [""] + perguntas, index=0)
+def _refresh_base():
+    st.session_state["_base_cache"] = _carregar_base()
 
-if pergunta_sel:
-    item = next((x for x in base if x["pergunta"] == pergunta_sel), None)
-    if item:
-        st.markdown("### 💡 Resposta do assistente")
-        st.markdown(f"<div class='resp-box'>{item['resposta']}</div>", unsafe_allow_html=True)
+if "_base_cache" not in st.session_state:
+    _refresh_base()
 
-        if item.get("email"):
-            st.markdown(f"**📧 Contacto:** [{item['email']}](mailto:{item['email']})")
+def _map_perguntas(base):
+    """Devolve listas sincronizadas: labels (texto) e ids/keys (id ou a própria pergunta)."""
+    labels = [b.get("pergunta", "") for b in base]
+    keys = [b.get("id") or b.get("pergunta") for b in base]
+    return labels, keys
 
-        if item.get("modelo_email"):
-            st.markdown("**✉️ Modelo de email sugerido:**")
-            st.code(item["modelo_email"], language="text")
-    else:
-        st.info("Não encontrei essa pergunta na base de conhecimento.")
+base = st.session_state["_base_cache"]
+labels, keys = _map_perguntas(base)
 
-# -----------------------------
-# 2) Criar nova pergunta
-# -----------------------------
-st.markdown("<div class='section-divider'>Criar nova pergunta</div>", unsafe_allow_html=True)
+# ---------- Secção: Perguntas & Respostas ----------
+st.markdown("### ❓ Perguntas e respostas")
+with st.container():
+    st.markdown('<div class="caixa">', unsafe_allow_html=True)
+    pergunta_sel = st.selectbox("Perguntas frequentes:", ["— selecione —"] + labels, index=0)
+    if pergunta_sel != "— selecione —":
+        # procurar o registo
+        reg = next((x for x in base if x.get("pergunta") == pergunta_sel), None)
+        if reg:
+            st.markdown('<div class="resposta-box">', unsafe_allow_html=True)
+            st.markdown(f"**Resposta:**\n\n{reg.get('resposta','').strip() or '_Sem texto_'}")
+            email = (reg.get("email") or "").strip()
+            if email:
+                st.markdown(f"**Email de contacto:** [{email}](mailto:{email})")
+            modelo = (reg.get("modelo_email") or "").strip()
+            if modelo:
+                st.markdown("**Modelo de email sugerido:**")
+                st.code(modelo, language="text")
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("Não encontrei o registo selecionado.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-with st.expander("➕ Adicionar"):
-    pwd_new = st.text_input("Password", type="password", key="pwd_new")
-    nova_pergunta = st.text_input("Pergunta", key="nova_pergunta")
-    nova_resposta = st.text_area("Resposta", height=140, key="nova_resposta")
-    novo_email = st.text_input("Email (opcional)", key="novo_email")
-    novo_modelo = st.text_area("Modelo de email (opcional)", height=140, key="novo_modelo")
+# ---------- Distância visual ----------
+st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
 
-    if st.button("💾 Guardar nova pergunta"):
-        if pwd_new != ADMIN_PASSWORD:
-            st.error("🔒 Password incorreta.")
-        elif not nova_pergunta or not nova_resposta:
-            st.warning("Preenche pelo menos **Pergunta** e **Resposta**.")
+# ---------- Secção: Criar Nova ----------
+st.markdown("### ➕ Criar nova pergunta")
+with st.expander("Abrir/fechar formulário de criação", expanded=False):
+    st.markdown('<div class="caixa">', unsafe_allow_html=True)
+    pwd_create = st.text_input("Password de administração", type="password", key="pwd_create")
+    nova_pergunta = st.text_input("Pergunta")
+    nova_resposta = st.text_area("Resposta", height=140)
+    novo_email = st.text_input("Email (opcional)")
+    novo_modelo = st.text_area("Modelo de email (opcional)", height=120)
+
+    if st.button("Guardar nova pergunta"):
+        if pwd_create != ADMIN_PASSWORD:
+            st.error("Password incorreta.")
+        elif not nova_pergunta.strip() or not nova_resposta.strip():
+            st.warning("A pergunta e a resposta são obrigatórias.")
         else:
             try:
-                nova = {
-                    "pergunta": nova_pergunta.strip(),
-                    "resposta": nova_resposta.strip(),
-                    "email": (novo_email or "").strip(),
-                    "modelo_email": (novo_modelo or "").strip()
-                }
-                upsert_pergunta([], nova)
-                st.success("✅ Pergunta criada/atualizada com sucesso. Recarrega a página para ver no dropdown.")
+                criar_pergunta(nova_pergunta, nova_resposta, novo_email, novo_modelo)
+                st.success("Pergunta criada com sucesso.")
+                _refresh_base()
             except Exception as e:
-                st.error(f"Erro ao gravar: {e}")
+                st.error(f"Erro ao criar: {e}")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# -----------------------------
-# 3) Editar / Apagar pergunta
-# -----------------------------
-st.markdown("<div class='section-divider'>Editar / Apagar perguntas</div>", unsafe_allow_html=True)
+# ---------- Distância visual ----------
+st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
 
-with st.expander("✏️ Gerir perguntas existentes"):
-    pwd2 = st.text_input("Password", type="password", key="pwd_edit")
-    base2 = ler_base_conhecimento()
-    perguntas2 = [p["pergunta"] for p in base2]
-    alvo = st.selectbox("Seleciona a pergunta:", [""] + perguntas2, key="alvo_editar")
+# ---------- Secção: Editar existente ----------
+st.markdown("### ✏️ Editar pergunta existente")
+with st.expander("Abrir/fechar formulário de edição", expanded=False):
+    st.markdown('<div class="caixa">', unsafe_allow_html=True)
+    base = st.session_state["_base_cache"]
+    labels, keys = _map_perguntas(base)
+    idx = st.selectbox("Escolher pergunta para editar:", ["— selecione —"] + labels, index=0, key="edit_select")
+    if idx != "— selecione —":
+        reg = next((x for x in base if x.get("pergunta") == idx), None)
+        if reg:
+            edit_pwd = st.text_input("Password de administração", type="password", key="pwd_edit")
+            novo_p = st.text_input("Nova pergunta", value=reg.get("pergunta",""))
+            novo_r = st.text_area("Nova resposta", value=reg.get("resposta",""), height=140)
+            novo_e = st.text_input("Novo email", value=reg.get("email",""))
+            novo_m = st.text_area("Novo modelo de email (opcional)", value=reg.get("modelo_email",""), height=120)
 
-    if alvo:
-        atual = next((x for x in base2 if x["pergunta"] == alvo), None) or {}
-        e_resposta = st.text_area("Resposta", value=atual.get("resposta", ""), height=140, key="e_resposta")
-        e_email = st.text_input("Email (opcional)", value=atual.get("email", ""), key="e_email")
-        e_modelo = st.text_area("Modelo de email (opcional)", value=atual.get("modelo_email", ""), height=140, key="e_modelo")
-
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("💾 Guardar alterações"):
-                if pwd2 != ADMIN_PASSWORD:
-                    st.error("🔒 Password incorreta.")
+            colE1, colE2 = st.columns(2)
+            if colE1.button("Guardar alterações"):
+                if edit_pwd != ADMIN_PASSWORD:
+                    st.error("Password incorreta.")
+                elif not novo_p.strip() or not novo_r.strip():
+                    st.warning("Pergunta e resposta são obrigatórias.")
                 else:
                     try:
-                        nova = {
-                            "pergunta": alvo,
-                            "resposta": e_resposta.strip(),
-                            "email": (e_email or "").strip(),
-                            "modelo_email": (e_modelo or "").strip()
-                        }
-                        upsert_pergunta([], nova)
-                        st.success("✅ Alterações guardadas. Recarrega a página para ver no dropdown.")
+                        chave = reg.get("id") or reg.get("pergunta")
+                        editar_pergunta(chave, novo_p, novo_r, novo_e, novo_m)
+                        st.success("Pergunta atualizada.")
+                        _refresh_base()
                     except Exception as e:
-                        st.error(f"Erro ao gravar: {e}")
-        with c2:
-            if st.button("🗑️ Apagar pergunta"):
-                if pwd2 != ADMIN_PASSWORD:
-                    st.error("🔒 Password incorreta.")
+                        st.error(f"Erro ao editar: {e}")
+            if colE2.button("Apagar esta pergunta"):
+                if edit_pwd != ADMIN_PASSWORD:
+                    st.error("Password incorreta.")
                 else:
                     try:
-                        apagar_pergunta([], alvo)
-                        st.success("🗑️ Pergunta apagada. Recarrega a página para atualizar o dropdown.")
+                        chave = reg.get("id") or reg.get("pergunta")
+                        apagar_pergunta(chave)
+                        st.success("Pergunta apagada.")
+                        _refresh_base()
                     except Exception as e:
                         st.error(f"Erro ao apagar: {e}")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# -----------------------------
-# 4) Importar / Exportar base
-# -----------------------------
-st.markdown("<div class='section-divider'>Importar / Exportar base de conhecimento</div>", unsafe_allow_html=True)
+# ---------- Distância visual ----------
+st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
 
-with st.expander("⬇️ Download / ⬆️ Upload JSON"):
-    pwd3 = st.text_input("Password", type="password", key="pwd_io")
+# ---------- Secção: Download / Upload ----------
+st.markdown("### ⬇️⬆️ Exportar / Importar base de conhecimento")
+with st.expander("Abrir/fechar exportação e importação", expanded=False):
+    st.markdown('<div class="caixa">', unsafe_allow_html=True)
 
     # Download
-    if st.button("📥 Descarregar JSON"):
-        if pwd3 != ADMIN_PASSWORD:
-            st.error("🔒 Password incorreta.")
-        else:
-            try:
-                txt = exportar_toda_base_json()
-                st.download_button(
-                    label="Download base_conhecimento.json",
-                    data=txt.encode("utf-8"),
-                    file_name="base_conhecimento.json",
-                    mime="application/json"
-                )
-            except Exception as e:
-                st.error(f"Erro ao gerar JSON: {e}")
+    base = st.session_state["_base_cache"]
+    json_str = json.dumps(base, ensure_ascii=False, indent=2)
+    st.download_button(
+        label="⬇️ Descarregar JSON",
+        data=json_str.encode("utf-8"),
+        file_name="base_conhecimento_export.json",
+        mime="application/json",
+    )
 
-    # Upload
-    up = st.file_uploader("Carregar ficheiro JSON", type=["json"])
-    if st.button("📤 Importar JSON"):
-        if pwd3 != ADMIN_PASSWORD:
-            st.error("🔒 Password incorreta.")
-        elif not up:
-            st.warning("Seleciona um ficheiro JSON.")
-        else:
-            try:
-                dados = json.loads(up.read().decode("utf-8"))
-                if not isinstance(dados, list):
-                    st.error("O JSON deve ser uma lista de objetos.")
+    # Upload (merge por pergunta)
+    up_pwd = st.text_input("Password para importar", type="password", key="pwd_import")
+    up_file = st.file_uploader("Carregar ficheiro JSON para importar (merge por pergunta)", type=["json"])
+    if up_file is not None:
+        try:
+            novo_conteudo = json.load(up_file)
+            if not isinstance(novo_conteudo, list):
+                st.error("O JSON deve conter uma lista de objetos.")
+            else:
+                if up_pwd != ADMIN_PASSWORD:
+                    st.error("Password incorreta.")
                 else:
-                    from assistente import sb_bulk_import
-                    sb_bulk_import(dados)
-                    st.success("✅ Base importada com sucesso. Recarrega a página para atualizar.")
-            except Exception as e:
-                st.error(f"Erro ao importar: {e}")
+                    # Merge pergunta->registo
+                    atual = {x.get("pergunta"): x for x in ler_base_conhecimento()}
+                    for item in novo_conteudo:
+                        p = (item.get("pergunta") or "").strip()
+                        if not p:
+                            continue
+                        atual[p] = {
+                            "pergunta": p,
+                            "resposta": (item.get("resposta") or "").strip(),
+                            "email": (item.get("email") or "").strip(),
+                            "modelo_email": (item.get("modelo_email") or "").strip(),
+                        }
+                    # Gravar via API, respeitando destinos
+                    # estratégia: apagar tudo local e recriar? Aqui vamos atualizar/insert por pergunta
+                    for p, payload in atual.items():
+                        # tenta editar; se não existir, cria
+                        try:
+                            editar_pergunta(p, payload["pergunta"], payload["resposta"], payload["email"], payload["modelo_email"])
+                        except Exception:
+                            criar_pergunta(payload["pergunta"], payload["resposta"], payload["email"], payload["modelo_email"])
+                    st.success("Importação concluída.")
+                    _refresh_base()
+        except json.JSONDecodeError:
+            st.error("JSON inválido.")
+        except Exception as e:
+            st.error(f"Erro a importar: {e}")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# -----------------------------
-# Rodapé
-# -----------------------------
-st.markdown("<hr>", unsafe_allow_html=True)
-st.markdown("<div style='font-size:12px;color:#6d5c2f;text-align:center;'>© 2025 AAC</div>", unsafe_allow_html=True)
+# ---------- Rodapé ----------
+st.markdown("---")
+st.markdown('<div class="subtle">© 2025 AAC</div>', unsafe_allow_html=True)
