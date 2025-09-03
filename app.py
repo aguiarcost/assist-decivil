@@ -29,22 +29,60 @@ st.markdown(
     """
     <style>
       .stApp { background: #fff7ef; }
-      h1, h2, h3 { color: #ef6c00; }
 
-      /* header com avatar + título */
-      .header-flex { display:flex; align-items:center; gap:14px; }
-      .title-tight { margin: 0; padding: 0; line-height: 1.1; }
+      /* Títulos */
+      h1 {
+        color: #ef6c00;
+        font-size: 2.4rem;
+        margin-bottom: 0.6rem;
+      }
+      h2 {
+        color: #ef6c00;
+        font-size: 1.3rem;
+        margin-top: 1.2rem;
+        margin-bottom: 0.4rem;
+      }
+      h3 {
+        color: #ef6c00;
+        font-size: 1.1rem;
+        margin-top: 1rem;
+        margin-bottom: 0.3rem;
+      }
 
-      /* caixas brancas */
-      .caixa { background:#fff; border:1px solid #ffd6b3; border-radius:12px; padding:18px 20px; }
-      .resposta-box { background:#fff; border-left: 4px solid #ef6c00; padding:14px 16px; border-radius:8px; }
+      /* Header com avatar + título */
+      .header-flex {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .title-tight {
+        margin: 0;
+        padding: 0;
+        line-height: 1.1;
+      }
 
-      /* espaçamentos verticais */
+      /* Caixas brancas */
+      .caixa {
+        background: #fff;
+        border: 1px solid #ffd6b3;
+        border-radius: 12px;
+        padding: 18px 20px;
+      }
+      .resposta-box {
+        background: #fff;
+        border-left: 4px solid #ef6c00;
+        padding: 14px 16px;
+        border-radius: 8px;
+        margin-top: 12px;
+        margin-bottom: 20px;
+      }
+
+      /* Espaçamentos verticais */
       .space-xl { margin-top: 36px; }
       .space-lg { margin-top: 28px; }
       .space-md { margin-top: 18px; }
 
-      .subtle { color:#7f8c8d; font-size:0.9rem; }
+      .subtle { color: #7f8c8d; font-size: 0.9rem; }
       .separador-visual { height: 26px; }
     </style>
     """,
