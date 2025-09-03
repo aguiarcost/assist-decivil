@@ -119,7 +119,7 @@ if pergunta_sel.strip():
     reg = next((x for x in base if x.get("pergunta") == pergunta_sel), None)
 
     if reg:
-        st.markdown('<div class="resposta-box">', unsafe_allow_html=True)
+        #st.markdown('<div class="resposta-box">', unsafe_allow_html=True)
         st.markdown(f"**Resposta**\n\n{(reg.get('resposta') or '').strip() or '_Sem texto_'}")
 
         email = (reg.get("email") or "").strip()
