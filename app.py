@@ -30,23 +30,25 @@ st.markdown(
     <style>
       .stApp { background: #fff7ef; }
 
-      /* Títulos */
-      h1 {
+      /* Títulos personalizados */
+      h1, .titulo-h1 {
         color: #ef6c00;
         font-size: 2.4rem;
         margin-bottom: 0.6rem;
       }
-      h2 {
+      .titulo-h2 {
         color: #ef6c00;
         font-size: 1.3rem;
         margin-top: 1.2rem;
         margin-bottom: 0.4rem;
+        font-weight: 600;
       }
-      h3 {
+      .titulo-h3 {
         color: #ef6c00;
         font-size: 1.1rem;
         margin-top: 1rem;
         margin-bottom: 0.3rem;
+        font-weight: 500;
       }
 
       /* Header com avatar + título */
@@ -93,8 +95,6 @@ st.markdown(
 # Header com avatar
 # =========================
 def _avatar_html() -> str:
-    """Mostra o avatar se existir; caso contrário, mostra só o título."""
-    # Em alguns ambientes __file__ pode não existir
     try:
         root = os.path.dirname(__file__)
     except NameError:
@@ -112,7 +112,7 @@ def _avatar_html() -> str:
               </div>
             """
         except Exception:
-            pass  # se falhar leitura, cai no fallback abaixo
+            pass
 
     return '<h1 class="title-tight">Felisberto, Assistente Administrativo ACSUTA</h1>'
 
@@ -127,7 +127,6 @@ st.write(
 # =========================
 @st.cache_data(show_spinner=False)
 def _carregar_base():
-    """Lê a base de conhecimento do backend (ficheiro/Supabase, conforme assistente.py)."""
     return ler_base_conhecimento()
 
 def _refresh_base():
@@ -144,20 +143,17 @@ def _labels_e_chaves(base):
 # =========================
 # Secção: Perguntas & Respostas
 # =========================
-st.markdown("### ❓ Perguntas e respostas")
+st.markdown("<div class='titulo-h2'>❓ Perguntas e respostas</div>", unsafe_allow_html=True)
 
 base = st.session_state["_base_cache"]
 labels, chaves = _labels_e_chaves(base)
 
-# Selectbox com valor inicial em branco (string vazia)
 pergunta_sel = st.selectbox("Perguntas frequentes:", [""] + labels, index=0, key="faq_select")
 
-# Só prossegue se foi feita uma seleção válida
 if pergunta_sel.strip():
     reg = next((x for x in base if x.get("pergunta") == pergunta_sel), None)
 
     if reg:
-        #st.markdown('<div class="resposta-box">', unsafe_allow_html=True)
         st.markdown(f"**Resposta**\n\n{(reg.get('resposta') or '').strip() or '_Sem texto_'}")
 
         email = (reg.get("email") or "").strip()
@@ -168,20 +164,17 @@ if pergunta_sel.strip():
         if modelo:
             st.markdown("**Modelo de email sugerido:**")
             st.code(modelo, language="text")
-        st.markdown("</div>", unsafe_allow_html=True)
+
     else:
         st.info("Não encontrei o registo selecionado.")
 
-# Separação visual grande
 st.markdown('<div class="space-xl"></div>', unsafe_allow_html=True)
 
 # =========================
 # Secção: Criar nova pergunta
 # =========================
-st.markdown("### ➕ Criar nova pergunta")
+st.markdown("<div class='titulo-h2'>➕ Criar nova pergunta</div>", unsafe_allow_html=True)
 with st.expander("Abrir/fechar formulário de criação", expanded=False):
- #   st.markdown('<div class="caixa">', unsafe_allow_html=True)
-
     pwd_create = st.text_input("Password de administração", type="password", key="pwd_create")
     nova_pergunta = st.text_input("Pergunta")
     nova_resposta = st.text_area("Resposta", height=140)
@@ -203,21 +196,18 @@ with st.expander("Abrir/fechar formulário de criação", expanded=False):
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Separação visual média
 st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
 
 # =========================
 # Secção: Editar / Apagar
 # =========================
-st.markdown("### ✏️ Editar pergunta existente")
+st.markdown("<div class='titulo-h2'>✏️ Editar pergunta existente</div>", unsafe_allow_html=True)
 with st.expander("Abrir/fechar formulário de edição", expanded=False):
- #   st.markdown('<div class="caixa">', unsafe_allow_html=True)
-
     base = st.session_state["_base_cache"]
     labels, chaves = _labels_e_chaves(base)
-    alvo = st.selectbox("Escolher pergunta:", ["— selecione —"] + labels, index=0, key="edit_select")
+    alvo = st.selectbox("Escolher pergunta:", [""] + labels, index=0, key="edit_select")
 
-    if alvo != "— selecione —":
+    if alvo.strip():
         reg = next((x for x in base if x.get("pergunta") == alvo), None)
         if reg:
             pwd_edit = st.text_input("Password de administração", type="password", key="pwd_edit")
@@ -257,16 +247,13 @@ with st.expander("Abrir/fechar formulário de edição", expanded=False):
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Separação visual
 st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
 
 # =========================
 # Secção: Exportar / Importar
 # =========================
-st.markdown("### ⬇️⬆️ Exportar / Importar base de conhecimento")
+st.markdown("<div class='titulo-h2'>⬇️⬆️ Exportar / Importar base de conhecimento</div>", unsafe_allow_html=True)
 with st.expander("Abrir/fechar exportação e importação", expanded=False):
-#    st.markdown('<div class="caixa">', unsafe_allow_html=True)
-
     base = st.session_state["_base_cache"]
     json_str = json.dumps(base, ensure_ascii=False, indent=2)
     st.download_button(
@@ -292,7 +279,6 @@ with st.expander("Abrir/fechar exportação e importação", expanded=False):
             elif up_pwd != ADMIN_PASSWORD:
                 st.error("Password incorreta.")
             else:
-                # Merge por pergunta (atualiza existentes, cria novos)
                 atual_map = {x.get("pergunta"): x for x in ler_base_conhecimento()}
                 for item in novo_conteudo:
                     p = (item.get("pergunta") or "").strip()
@@ -305,11 +291,9 @@ with st.expander("Abrir/fechar exportação e importação", expanded=False):
                         "modelo_email": (item.get("modelo_email") or "").strip(),
                     }
 
-                # Aplica alterações
                 criados, editados = 0, 0
                 for p, payload in atual_map.items():
                     try:
-                        # tenta editar: se não existir, a tua função deve sinalizar
                         editar_pergunta(
                             p, payload["pergunta"], payload["resposta"], payload["email"], payload["modelo_email"]
                         )
