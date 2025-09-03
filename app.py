@@ -32,10 +32,10 @@ st.markdown(
 
       /* Títulos personalizados */
       h1, .titulo-h1 {
-        color: #ef6c00;
-        font-size: 2.4rem;
-        margin-bottom: 0.6rem;
-      }
+      color: #ef6c00 !important;
+      font-size: 2.4rem !important;
+      margin-bottom: 0.6rem;
+    }
       .titulo-h2 {
         color: #ef6c00;
         font-size: 1.3rem;
