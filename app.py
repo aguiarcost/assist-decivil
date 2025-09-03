@@ -130,6 +130,7 @@ def _carregar_base():
     return ler_base_conhecimento()
 
 def _refresh_base():
+    _carregar_base.clear()  # limpa a cache para forçar recarregamento
     st.session_state["_base_cache"] = _carregar_base()
 
 if "_base_cache" not in st.session_state:
