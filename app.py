@@ -108,13 +108,13 @@ def _avatar_html() -> str:
             return f"""
               <div class="header-flex">
                   <img src="data:image/png;base64,{b64}" alt="avatar" width="72" style="margin-top:-4px" />
-                  <h1 class="title-tight">Felisberto, Assistente Administrativo ACSUTA</h1>
+                  <h1 class="title-tight titulo-h1">Felisberto, Assistente Administrativo ACSUTA</h1>
               </div>
             """
         except Exception:
             pass
 
-    return '<h1 class="title-tight">Felisberto, Assistente Administrativo ACSUTA</h1>'
+    return '<h1 class="title-tight titulo-h1">Felisberto, Assistente Administrativo ACSUTA</h1>'
 
 st.markdown(_avatar_html(), unsafe_allow_html=True)
 st.write(
