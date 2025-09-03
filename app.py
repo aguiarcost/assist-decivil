@@ -107,14 +107,17 @@ def _labels_e_chaves(base):
 # Secção: Perguntas & Respostas
 # =========================
 st.markdown("### ❓ Perguntas e respostas")
-# st.markdown('<div class="caixa">', unsafe_allow_html=True)
 
 base = st.session_state["_base_cache"]
 labels, chaves = _labels_e_chaves(base)
 
-pergunta_sel = st.selectbox("Perguntas frequentes:", ["  "] + labels, index=0, key="faq_select")
-if pergunta_sel != " ":
+# Selectbox com valor inicial em branco (string vazia)
+pergunta_sel = st.selectbox("Perguntas frequentes:", [""] + labels, index=0, key="faq_select")
+
+# Só prossegue se foi feita uma seleção válida
+if pergunta_sel.strip():
     reg = next((x for x in base if x.get("pergunta") == pergunta_sel), None)
+
     if reg:
         st.markdown('<div class="resposta-box">', unsafe_allow_html=True)
         st.markdown(f"**Resposta**\n\n{(reg.get('resposta') or '').strip() or '_Sem texto_'}")
@@ -130,8 +133,6 @@ if pergunta_sel != " ":
         st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("Não encontrei o registo selecionado.")
-
-st.markdown("</div>", unsafe_allow_html=True)
 
 # Separação visual grande
 st.markdown('<div class="space-xl"></div>', unsafe_allow_html=True)
