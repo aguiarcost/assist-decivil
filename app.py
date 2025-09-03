@@ -112,7 +112,7 @@ st.markdown("### ❓ Perguntas e respostas")
 base = st.session_state["_base_cache"]
 labels, chaves = _labels_e_chaves(base)
 
-pergunta_sel = st.selectbox("Perguntas frequentes:", ["— selecione —"] + labels, index=0, key="faq_select")
+pergunta_sel = st.selectbox("Perguntas frequentes:", ["  "] + labels, index=0, key="faq_select")
 if pergunta_sel != " ":
     reg = next((x for x in base if x.get("pergunta") == pergunta_sel), None)
     if reg:
