@@ -131,7 +131,12 @@ def _carregar_base():
 
 def _refresh_base():
     _carregar_base.clear()  # limpa a cache para forçar recarregamento
+    try:
     st.session_state["_base_cache"] = _carregar_base()
+except Exception as e:
+    st.warning("⚠️ Não foi possível carregar a base. A usar fallback local.")
+    print("Erro:", e)
+    st.session_state["_base_cache"] = []
 
 if "_base_cache" not in st.session_state:
     _refresh_base()
